@@ -72,18 +72,14 @@ npm run dev
 
 Vite will serve the application at `http://localhost:5173`.  Ensure the back‑end is running so that API calls succeed.
 
-## Usage
+## PyCharm Setup (Windows PowerShell Users)
 
-### Analysing a single frame
+If you are using PyCharm on Windows and encounter permission issues when running the Flask server (for example, when the terminal blocks script execution), open PowerShell and temporarily allow script execution with:
 
-Send a POST request to `/api/analyze-frame` with a JSON payload containing a base64‑encoded image:
-
-```json
-{
-  "image": "data:image/jpeg;base64, …"
-}
-
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
+---
 
 The response includes a list of detected faces, each with the predicted emotion, confidence scores for all emotions, the bounding box coordinates, and a processed image annotated with bounding boxes and labels.  Emotion labels correspond to the seven categories noted above [learnopencv.com](https://learnopencv.com/facial-emotion-recognition/#:~:text=six%20basic%20emotions%20%E2%80%93%20happiness%2C,additional%20categories%3A%20neutral%20and%20contempt).
 
