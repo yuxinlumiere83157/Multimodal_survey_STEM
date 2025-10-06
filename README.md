@@ -1,14 +1,12 @@
-# Untitled
-
-# 705 Backend team– Real‑Time Emotion Recognition System
+# CS705 Group 7 - Real‑Time Survey Emotion Recognition System
 
 ## Overview
 
-**705 Backend** is a multimodal emotion‑recognition project consisting of a Python/Flask API and a React front‑end.  The system uses Google’s MediaPipe *Face Mesh* to detect faces and extract facial landmarks, and a pre‑trained PyTorch model (packaged as a TorchScript file) to classify expressions into seven emotions: neutral, happiness, sadness, surprise, fear, disgust and anger [mediapipe](https://mediapipe.readthedocs.io/en/latest/solutions/face_mesh.html#:~:text=MediaPipe%20Face%20Mesh%20is%20a,performance%20critical%20for%20live%20experiences) [learnopencv](https://learnopencv.com/facial-emotion-recognition/#:~:text=six%20basic%20emotions%20%E2%80%93%20happiness%2C,additional%20categories%3A%20neutral%20and%20contempt).  The API supports both single‑frame and video analysis and is designed to run locally for research or demonstration purposes.  A web user interface allows participants to answer a questionnaire while their facial expressions are recorded and analysed.
+This project is a multimodal emotion‑recognition project consisting of a Python/Flask API and a React front‑end. The system uses Google’s MediaPipe to detect faces and extract facial landmarks, and a pre‑trained PyTorch model (packaged as a TorchScript file) to classify expressions into seven emotions: neutral, happiness, sadness, surprise, fear, disgust and anger. The API supports both single‑frame and video analysis and is designed to run locally for research or demonstration purposes. A web user interface allows participants to answer a questionnaire while their facial expressions are recorded and analysed.
 
 ## Features
 
-- **Real‑time face detection and emotion classification** – MediaPipe’s Face Mesh estimates up to 468 3‑D facial landmarks per frame, enabling robust face cropping and alignment [mediapipe.readthedocs.io](https://mediapipe.readthedocs.io/en/latest/solutions/face_mesh.html#:~:text=MediaPipe%20Face%20Mesh%20is%20a,performance%20critical%20for%20live%20experiences). The cropped region is fed to a TorchScript model trained to recognise facial emotions; predictions include per‑emotion probabilities and bounding boxes.
+- **Real‑time face detection and emotion classification** – The system detects faces in each frame and crops the facial region for analysis. The cropped face is then fed to a TorchScript model trained to recognise facial emotions; predictions include per‑emotion probabilities and bounding boxes.
 - **Video and frame analysis APIs** – REST endpoints allow clients to analyse a single image frame (as base64) or an uploaded video. The API returns the detected emotions for each face along with a processed image or a processed video file.
 - **Session‑based video recording** – When used with the provided front‑end, each survey question records a short video. Each video is saved alongside JSON metadata describing the dominant emotion and an emotion timeline. Files are organised by session ID for easy retrieval.
 - **Survey integration** – Additional endpoints permit saving Likert‑scale questionnaire responses. Responses are mapped to numerical scores and stored with the session.
@@ -25,16 +23,11 @@ The system is divided into two components:
 
 ## Installation
 
-### 1. Clone the repository and obtain the model
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/SauravK12/705_backend.git
 cd 705_backend
-
-# The large PyTorch model file is not stored in this repository because of its size.
-# Download `torchscript_model_0_66_49_wo_gl.pth` from the original project (see the GitHub link above)
-# and place it in the root of the repository next to `API.py`.
-
 ```
 
 ### 2. Back‑end setup
@@ -56,7 +49,7 @@ cd 705_backend
     
     ```
     
-    By default the server runs in debug mode on `http://localhost:5000`.  You should see a JSON message at the root endpoint confirming that the *Emotion Recognition API* is running.
+    By default the server runs in debug mode on `http://localhost:5006`.  You should see a JSON message at the root endpoint confirming that the *Emotion Recognition API* is running.
     
 
 ### 3. Front‑end setup
@@ -81,7 +74,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 ---
 
-The response includes a list of detected faces, each with the predicted emotion, confidence scores for all emotions, the bounding box coordinates, and a processed image annotated with bounding boxes and labels.  Emotion labels correspond to the seven categories noted above [learnopencv.com](https://learnopencv.com/facial-emotion-recognition/#:~:text=six%20basic%20emotions%20%E2%80%93%20happiness%2C,additional%20categories%3A%20neutral%20and%20contempt).
+The response includes a list of detected faces, each with the predicted emotion, confidence scores for all emotions, the bounding box coordinates, and a processed image annotated with bounding boxes and labels.  Emotion labels correspond to the seven categories noted above.
 
 ### Analysing a video
 
@@ -93,11 +86,11 @@ When used with the questionnaire interface, each call to `/api/save-question-vid
 
 ## Emotion Categories
 
-The underlying model recognises the following emotions.  These classes are widely used in facial expression research and originate from the FER/FER+ datasets [learnopencv.com](https://learnopencv.com/facial-emotion-recognition/#:~:text=six%20basic%20emotions%20%E2%80%93%20happiness%2C,additional%20categories%3A%20neutral%20and%20contempt):
+The underlying model recognises the following emotions.  These classes are widely used in facial expression research and originate from the FER/FER+ datasets:
 
 | Label | Description |
 | --- | --- |
-| **Neutral** | No strong emotional expression; serves as a baseline [learnopencv.com](https://learnopencv.com/facial-emotion-recognition/#:~:text=six%20basic%20emotions%20%E2%80%93%20happiness%2C,additional%20categories%3A%20neutral%20and%20contempt). |
+| **Neutral** | No strong emotional expression; serves as a baseline. |
 | **Happiness** | Indicates joy or satisfaction. |
 | **Sadness** | Reflects sorrow or disappointment. |
 | **Surprise** | Expression of amazement or astonishment. |
@@ -116,10 +109,6 @@ The underlying model recognises the following emotions.  These classes are widel
 - **Model replacement** – The current model `torchscript_model_0_66_49_wo_gl.pth` can be replaced with any TorchScript model that accepts 224×224 RGB images and outputs probabilities over the seven emotion classes. To train or convert your own PyTorch model to TorchScript, see the PyTorch documentation.
 - **Multiple faces** – The frame analysis endpoint supports detection of up to five faces; the video analysis endpoint processes a single face to reduce computational load.
 - **Deployment considerations** – The API is configured for development use. For production deployment behind a reverse proxy, disable debug mode, restrict allowed file sizes and implement authentication as needed.
-
-## Contributing
-
-Pull requests are welcome!  If you add new features such as audio‑based emotion recognition or improved front‑end design, update this README accordingly.  For significant changes, please open an issue first to discuss what you would like to change.
 
 ## License
 
