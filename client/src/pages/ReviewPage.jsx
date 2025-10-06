@@ -149,15 +149,6 @@ function ReviewPage() {
               ))}
             </div>
           </div>
-
-          <div className="card-actions">
-            <button
-              onClick={handleSubmit}
-              className="submit-button"
-            >
-              Submit Survey
-            </button>
-          </div>
         </div>
 
         {/* Analysis Results Section */}
@@ -207,6 +198,15 @@ function ReviewPage() {
                 </div>
               </div>
             )}
+
+            <div className="card-actions">
+              <button
+                onClick={handleSubmit}
+                className="submit-button"
+              >
+                Submit Survey
+              </button>
+            </div>
           </div>
         )}
 
