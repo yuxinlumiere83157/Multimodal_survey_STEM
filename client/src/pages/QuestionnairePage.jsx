@@ -23,6 +23,7 @@ function QuestionnairePage() {
 
   // CRITICAL FIX: Store question ID when recording starts
   const recordingQuestionIdRef = useRef(null);
+  const isNavigatingRef = useRef(false);
 
   const [questions] = useState([
     {
@@ -158,9 +159,17 @@ function QuestionnairePage() {
   }, [location.state]);
 
   useEffect(() => {
-    const savedAnswer = answers[currentQuestion?.id] || '';
+    if (!currentQuestion) return;
+
+    // Prevent race condition: don't update if we're in the middle of navigation
+    if (isNavigatingRef.current) {
+      isNavigatingRef.current = false;
+      return;
+    }
+
+    const savedAnswer = answers[currentQuestion.id] || '';
     setSelectedAnswer(savedAnswer);
-  }, [currentQuestionIndex, answers, currentQuestion]);
+  }, [currentQuestionIndex, currentQuestion, answers]);
 
   const captureAndAnalyzeFrame = async () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -176,7 +185,7 @@ function QuestionnairePage() {
     const imageData = canvas.toDataURL('image/jpeg');
 
     try {
-      const response = await fetch('http://localhost:5000/api/analyze-frame', {
+      const response = await fetch('http://localhost:5006/api/analyze-frame', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -369,7 +378,7 @@ function QuestionnairePage() {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/save-question-video', {
+      const response = await fetch('http://localhost:5006/api/save-question-video', {
         method: 'POST',
         body: formData
       });
@@ -436,7 +445,6 @@ function QuestionnairePage() {
       ...answers,
       [questionId]: selectedAnswer
     };
-    setAnswers(updatedAnswers);
 
     console.log(`[Q${questionId}] About to stop and save recording...`);
     // Stop and save current recording
@@ -449,7 +457,14 @@ function QuestionnairePage() {
       const nextQuestionId = questions[nextIndex].id;
 
       console.log(`Moving from Q${questionId} to Q${nextQuestionId}`);
+
+      // Set flag to prevent race condition in useEffect
+      isNavigatingRef.current = true;
+
+      // Update state in a batch to minimize re-renders
+      setAnswers(updatedAnswers);
       setCurrentQuestionIndex(nextIndex);
+      setSelectedAnswer(updatedAnswers[nextQuestionId] || '');
 
       // Wait for state to update, then start recording with NEW question ID
       setTimeout(() => {
@@ -465,13 +480,21 @@ function QuestionnairePage() {
       }, 500);
     } else {
       console.log('Last question - submitting survey');
+      setAnswers(updatedAnswers);
       submitSurvey(updatedAnswers);
     }
   };
 
   const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
+      const prevIndex = currentQuestionIndex - 1;
+      const prevQuestionId = questions[prevIndex].id;
+
+      // Set flag to prevent race condition in useEffect
+      isNavigatingRef.current = true;
+
+      setCurrentQuestionIndex(prevIndex);
+      setSelectedAnswer(answers[prevQuestionId] || '');
     }
   };
 

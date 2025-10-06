@@ -453,5 +453,143 @@ def save_question_video():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/analyze-survey-results', methods=['POST'])
+def analyze_survey_results():
+    """
+    Analyze survey results by comparing questionnaire answers with detected emotions.
+    Returns both the questionnaire-based result and AI-analyzed result with confidence scores.
+    """
+    try:
+        data = request.get_json()
+        session_id = data.get('sessionId')
+        answers = data.get('answers')  # {questionId: answerText}
+
+        if not session_id or not answers:
+            return jsonify({'error': 'sessionId and answers are required'}), 400
+
+        # === 1. Calculate Questionnaire-Based Result ===
+        def map_answer_to_score(ans):
+            """Map answer text to 1-5 scale (5=positive, 1=negative)"""
+            if ans in ["Always", "Extremely in touch", "Full trust", "Extremely satisfied", "Very good", "All the time", "Extremely unbothered", "Full control"]:
+                return 5
+            elif ans in ["Often", "In touch", "Lots of trust", "Satisfied", "Good", "Most of the time", "Unbothered", "Lots of control"]:
+                return 4
+            elif ans in ["Sometimes", "Neutral", "Fair", "About half of the time"]:
+                return 3
+            elif ans in ["Rarely", "Out of touch", "Little trust", "Dissatisfied", "Poor", "Some of the time", "Bothered", "Little control"]:
+                return 2
+            elif ans in ["Never", "Extremely out of touch", "No trust", "Extremely dissatisfied", "Very poor", "None of the time", "Extremely bothered", "No control"]:
+                return 1
+            else:
+                return 3  # Default to neutral
+
+        scores = [map_answer_to_score(ans) for ans in answers.values()]
+        avg_score = sum(scores) / len(scores) if scores else 3
+
+        # Determine questionnaire result and confidence
+        if avg_score >= 4.0:
+            questionnaire_result = "Happy"
+            questionnaire_confidence = min(((avg_score - 4.0) / 1.0) * 50 + 50, 100)
+        elif avg_score >= 3.0:
+            questionnaire_result = "Neutral"
+            questionnaire_confidence = 100 - abs(avg_score - 3.5) * 50
+        else:
+            questionnaire_result = "Unhappy"
+            questionnaire_confidence = min(((3.0 - avg_score) / 2.0) * 50 + 50, 100)
+
+        # === 2. Analyze Emotion Data from Videos ===
+        session_folder = os.path.join(app.config['QUESTION_VIDEOS_FOLDER'], str(session_id))
+
+        if not os.path.exists(session_folder):
+            return jsonify({'error': 'Session data not found'}), 404
+
+        # Collect all emotion data
+        all_emotions = []
+        emotion_files = [f for f in os.listdir(session_folder) if f.endswith('_emotions.json')]
+
+        for emotion_file in emotion_files:
+            with open(os.path.join(session_folder, emotion_file), 'r') as f:
+                emotion_info = json.load(f)
+                timeline = emotion_info.get('emotionTimeline', [])
+                all_emotions.extend([e['emotion'] for e in timeline])
+
+        # Count emotions
+        emotion_counts = {}
+        for emotion in all_emotions:
+            emotion_counts[emotion] = emotion_counts.get(emotion, 0) + 1
+
+        total_samples = len(all_emotions)
+
+        # Calculate emotion percentages
+        emotion_percentages = {
+            emotion: (count / total_samples * 100) if total_samples > 0 else 0
+            for emotion, count in emotion_counts.items()
+        }
+
+        # Classify emotions as positive, neutral, or negative
+        positive_emotions = ['Happiness', 'Surprise']
+        neutral_emotions = ['Neutral']
+        negative_emotions = ['Sadness', 'Fear', 'Disgust', 'Anger']
+
+        positive_pct = sum(emotion_percentages.get(e, 0) for e in positive_emotions)
+        neutral_pct = sum(emotion_percentages.get(e, 0) for e in neutral_emotions)
+        negative_pct = sum(emotion_percentages.get(e, 0) for e in negative_emotions)
+
+        # Determine AI-analyzed result
+        if positive_pct > negative_pct and positive_pct > neutral_pct:
+            ai_result = "Happy"
+            ai_confidence = min(positive_pct, 100)
+        elif negative_pct > positive_pct and negative_pct > neutral_pct:
+            ai_result = "Unhappy"
+            ai_confidence = min(negative_pct, 100)
+        else:
+            ai_result = "Neutral"
+            ai_confidence = min(neutral_pct, 100)
+
+        # === 3. Detect Discrepancy ===
+        discrepancy_detected = questionnaire_result != ai_result
+
+        # Calculate discrepancy severity (0-100)
+        discrepancy_score = 0
+        if discrepancy_detected:
+            # High discrepancy if results are opposite (Happy vs Unhappy)
+            if (questionnaire_result == "Happy" and ai_result == "Unhappy") or \
+               (questionnaire_result == "Unhappy" and ai_result == "Happy"):
+                discrepancy_score = 100
+            else:
+                # Moderate discrepancy if one is Neutral
+                discrepancy_score = 50
+
+        return jsonify({
+            'success': True,
+            'questionnaire': {
+                'result': questionnaire_result,
+                'confidence': round(questionnaire_confidence, 2),
+                'averageScore': round(avg_score, 2)
+            },
+            'ai_analysis': {
+                'result': ai_result,
+                'confidence': round(ai_confidence, 2),
+                'emotion_breakdown': {
+                    'positive': round(positive_pct, 2),
+                    'neutral': round(neutral_pct, 2),
+                    'negative': round(negative_pct, 2)
+                },
+                'emotion_counts': emotion_counts,
+                'total_samples': total_samples
+            },
+            'discrepancy': {
+                'detected': discrepancy_detected,
+                'severity': discrepancy_score,
+                'message': f"Your questionnaire suggests you are {questionnaire_result.lower()}, but your facial expressions during the survey suggest you might be {ai_result.lower()}." if discrepancy_detected else "Your answers align with your emotional expressions."
+            }
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5006)
