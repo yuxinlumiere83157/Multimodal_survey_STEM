@@ -176,7 +176,7 @@ function QuestionnairePage() {
     const imageData = canvas.toDataURL('image/jpeg');
 
     try {
-      const response = await fetch('http://localhost:5000/api/analyze-frame', {
+      const response = await fetch('http://localhost:5006/api/analyze-frame', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -369,7 +369,7 @@ function QuestionnairePage() {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/save-question-video', {
+      const response = await fetch('http://localhost:5006/api/save-question-video', {
         method: 'POST',
         body: formData
       });
