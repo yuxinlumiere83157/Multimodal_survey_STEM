@@ -1,8 +1,8 @@
 /* Complete reset styles for questionnaire page */
-body:has(.questionnaire-page) *:not(.custom-radio):not(.next-button),
-.questionnaire-page *:not(.custom-radio):not(.next-button),
-#root:has(.questionnaire-page) *:not(.custom-radio):not(.next-button),
-.root-container *:not(.custom-radio):not(.next-button) {
+body:has(.questionnaire-page) *:not(.custom-radio):not(.next-button):not(.likert-button),
+.questionnaire-page *:not(.custom-radio):not(.next-button):not(.likert-button),
+#root:has(.questionnaire-page) *:not(.custom-radio):not(.next-button):not(.likert-button),
+.root-container *:not(.custom-radio):not(.next-button):not(.likert-button) {
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
@@ -794,4 +794,255 @@ body:has(.questionnaire-page) {
 
 .subheading{
     font-size: large;
+}
+
+.loading-message {
+  text-align: center;
+  margin-top: 15px;
+  padding: 10px;
+  background-color: rgba(142, 124, 195, 0.1);
+  border-radius: 8px;
+  border-left: 4px solid #8e7cc3;
+}
+
+.loading-message p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+  font-style: italic;
+}
+
+/* ---------- layout / entrance ---------- */
+.likert-scale {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px 0;
+}
+
+.likert-option {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: fadeInUp .35s ease forwards;
+}
+.likert-option:nth-child(1) { animation-delay: 0.05s; }
+.likert-option:nth-child(2) { animation-delay: 0.10s; }
+.likert-option:nth-child(3) { animation-delay: 0.15s; }
+.likert-option:nth-child(4) { animation-delay: 0.20s; }
+.likert-option:nth-child(5) { animation-delay: 0.25s; }
+
+@keyframes fadeInUp {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- input visually hidden ---------- */
+.likert-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------- the square "button" ---------- */
+.likert-button {
+  --size: 86px;
+  --mouth-diameter: calc(var(--size) * 0.5);
+  --mouth-width: unset;
+  --mouth-height: unset;
+  --mouth-border-width: calc(var(--size) * 0.045);
+  --mouth-bottom-offset: 24%;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 24px;
+  border: 3px solid transparent;
+  background: var(--likert-color, #e5e7eb);
+  position: relative;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.16);
+  transition:
+    transform .25s cubic-bezier(.2, .7, .2, 1),
+    box-shadow .25s cubic-bezier(.2, .7, .2, 1),
+    border-color .25s cubic-bezier(.2, .7, .2, 1),
+    filter .2s linear;
+}
+
+/* ---------- the face inside each button ---------- */
+.face {
+  --face-color: #000;
+  width: 68%;
+  height: 68%;
+  position: relative;
+}
+
+/* ---------- eyes ---------- */
+.eyes {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 12px;
+}
+
+.eye {
+  width: 11px;
+  height: 11px;
+  background: var(--face-color);
+  border-radius: 50%;
+}
+
+/* ---------- mouth (base) ---------- */
+.mouth {
+  position: absolute;
+  left: 50%;
+  bottom: var(--mouth-bottom-offset, 24%);
+  transform: translateX(-50%);
+  width: var(--mouth-width, var(--mouth-diameter));
+  height: var(--mouth-height, var(--mouth-diameter));
+}
+
+.mouth::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border-width: var(--mouth-border-width, calc(var(--size) * 0.045));
+  border-style: solid;
+  border-color: transparent;
+}
+
+.likert-1 .likert-button {
+  --likert-color: #e53935;
+  --mouth-diameter: calc(var(--size) * 0.7);
+  --mouth-border-width: calc(var(--size) * 0.058);
+  --mouth-bottom-offset: -65%;
+}
+
+.likert-2 .likert-button {
+  --likert-color: #f57c00;
+  --mouth-diameter: calc(var(--size) * 0.55);
+  --mouth-border-width: calc(var(--size) * 0.05);
+  --mouth-bottom-offset: -47%;
+}
+
+.likert-3 .likert-button {
+  --likert-color: #fbc02d;
+  --mouth-width: calc(var(--size) * 0.42);
+  --mouth-height: calc(var(--size) * 0.07);
+  --mouth-border-width: 0px;
+  --mouth-bottom-offset: 22%;
+}
+
+.likert-4 .likert-button {
+  --likert-color: #8bc34a;
+  --mouth-diameter: calc(var(--size) * 0.55);
+  --mouth-border-width: calc(var(--size) * 0.05);
+  --mouth-bottom-offset: 18%;
+}
+
+.likert-5 .likert-button {
+  --likert-color: #43a047;
+  --mouth-diameter: calc(var(--size) * 0.7);
+  --mouth-border-width: calc(var(--size) * 0.058);
+  --mouth-bottom-offset: 16%;
+}
+
+.likert-1 .mouth::before,
+.likert-2 .mouth::before {
+  border-top-color: var(--face-color);
+  border-bottom-width: 0;
+}
+
+.likert-3 .mouth {
+  background: var(--face-color);
+  border-radius: calc(var(--size) * 0.04);
+}
+
+.likert-3 .mouth::before {
+  border-width: 0;
+}
+
+.likert-4 .mouth::before,
+.likert-5 .mouth::before {
+  border-bottom-color: var(--face-color);
+  border-top-width: 0;
+}
+
+/* For questions with fewer than 5 options, adjust colors */
+.likert-scale:has(.likert-option:nth-child(3):last-child) .likert-1 .likert-button {
+  --likert-color: #e53935;
+}
+
+.likert-scale:has(.likert-option:nth-child(3):last-child) .likert-2 .likert-button {
+  --likert-color: #fbc02d;
+}
+
+.likert-scale:has(.likert-option:nth-child(3):last-child) .likert-3 .likert-button {
+  --likert-color: #43a047;
+}
+
+/* ---------- interaction states ---------- */
+.likert-option:hover .likert-button {
+  transform: translateY(-6px);
+  filter: brightness(1.05);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.24);
+}
+
+.likert-input:checked + .likert-button {
+  border-color: rgba(0, 0, 0, 0.65);
+  transform: translateY(-4px) scale(1.08);
+  box-shadow:
+    0 0 0 4px rgba(255, 255, 255, 0.75),
+    0 16px 32px rgba(0, 0, 0, 0.26);
+}
+
+/* ---------- responsive adjustments for Likert scale ---------- */
+@media (max-width: 768px) {
+  .likert-scale {
+    gap: 8px;
+    max-width: 100%;
+    padding: 16px 0;
+  }
+
+  .likert-button {
+    --size: 72px;
+    border-radius: 20px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .eyes {
+    gap: 9px;
+    top: 40%;
+  }
+
+  .eye {
+    width: 9px;
+    height: 9px;
+  }
+}
+
+@media (max-width: 480px) {
+  .likert-scale {
+    gap: 6px;
+  }
+
+  .likert-button {
+    --size: 58px;
+    border-radius: 16px;
+  }
+
+  .eyes {
+    gap: 7px;
+  }
+
+  .eye {
+    width: 7px;
+    height: 7px;
+  }
 }
