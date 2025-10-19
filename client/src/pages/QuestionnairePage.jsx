@@ -19,6 +19,7 @@ function QuestionnairePage() {
   const [currentEmotion, setCurrentEmotion] = useState(null);
   const [emotionData, setEmotionData] = useState([]);
   const [sessionId, setSessionId] = useState(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const location = useLocation();
 
   // CRITICAL FIX: Store question ID when recording starts
@@ -190,8 +191,15 @@ function QuestionnairePage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ image: imageData })
+        body: JSON.stringify({ image: imageData }),
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(3000)
       });
+
+      if (!response.ok) {
+        console.warn(`Emotion analysis failed: ${response.status}`);
+        return;
+      }
 
       const result = await response.json();
 
@@ -304,7 +312,18 @@ function QuestionnairePage() {
     return new Promise((resolve) => {
       const recorder = mediaRecorderRef.current;
 
+      // Add timeout to prevent hanging
+      const timeout = setTimeout(() => {
+        console.error(`[Q${questionIdForThisRecording}] Recording stop timeout - force resolving`);
+        setIsRecording(false);
+        recordedChunksRef.current = [];
+        setEmotionData([]);
+        recordingQuestionIdRef.current = null;
+        resolve();
+      }, 5000); // 5 second timeout
+
       recorder.onstop = async () => {
+        clearTimeout(timeout);
         console.log(`\n[Q${questionIdForThisRecording}] ===== ONSTOP EVENT FIRED =====`);
         console.log(`[Q${questionIdForThisRecording}] Recording stopped. Chunks: ${recordedChunksRef.current.length}`);
         console.log(`[Q${questionIdForThisRecording}] Recorder state: ${recorder.state}`);
@@ -317,11 +336,16 @@ function QuestionnairePage() {
         console.log(`[Q${questionIdForThisRecording}] After delay, chunks: ${recordedChunksRef.current.length}`);
 
         try {
-          // Pass the captured question ID
-          await saveVideoWithEmotion(questionIdForThisRecording);
-          console.log(`[Q${questionIdForThisRecording}] Video saved successfully`);
+          // Pass the captured question ID - but don't fail navigation if save fails
+          if (recordedChunksRef.current.length > 0) {
+            await saveVideoWithEmotion(questionIdForThisRecording);
+            console.log(`[Q${questionIdForThisRecording}] Video saved successfully`);
+          } else {
+            console.warn(`[Q${questionIdForThisRecording}] No chunks to save, skipping`);
+          }
         } catch (error) {
-          console.error(`[Q${questionIdForThisRecording}] Error saving video:`, error);
+          console.error(`[Q${questionIdForThisRecording}] Error saving video (continuing anyway):`, error);
+          // Don't reject - allow navigation to continue even if save fails
         }
 
         recordedChunksRef.current = [];
@@ -331,8 +355,15 @@ function QuestionnairePage() {
         resolve();
       };
 
-      console.log(`Calling recorder.stop()...`);
-      recorder.stop();
+      try {
+        console.log(`Calling recorder.stop()...`);
+        recorder.stop();
+      } catch (error) {
+        clearTimeout(timeout);
+        console.error(`[Q${questionIdForThisRecording}] Error stopping recorder:`, error);
+        setIsRecording(false);
+        resolve(); // Don't block navigation
+      }
     });
   };
 
@@ -380,11 +411,15 @@ function QuestionnairePage() {
     try {
       const response = await fetch('http://localhost:5006/api/save-question-video', {
         method: 'POST',
-        body: formData
+        body: formData,
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(10000) // 10 second timeout for video upload
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        console.warn(`[Q${questionId}] Video save failed: ${response.status}`);
+        // Don't throw error - allow survey to continue
+        return;
       }
 
       const result = await response.json();
@@ -395,8 +430,8 @@ function QuestionnairePage() {
         console.log('Session ID set:', result.sessionId);
       }
     } catch (error) {
-      console.error(`[Q${questionId}] Error saving video:`, error);
-      throw error;
+      console.error(`[Q${questionId}] Error saving video (survey will continue):`, error);
+      // Don't throw error - allow survey to continue even if backend is down
     }
   };
 
@@ -421,6 +456,8 @@ function QuestionnairePage() {
 
   const submitSurvey = async (finalAnswers) => {
     console.log('Submitting survey');
+    
+    setIsLoadingPreview(true);
 
     if (isRecording) {
       await stopRecordingAndSave();
@@ -441,47 +478,61 @@ function QuestionnairePage() {
     const questionId = currentQuestion.id;
     console.log(`\n========== handleNext called for question ${questionId} ==========`);
 
+    // Prevent multiple clicks while processing
+    if (isNavigatingRef.current) {
+      console.log('Navigation already in progress, ignoring click');
+      return;
+    }
+
     const updatedAnswers = {
       ...answers,
       [questionId]: selectedAnswer
     };
 
-    console.log(`[Q${questionId}] About to stop and save recording...`);
-    // Stop and save current recording
-    await stopRecordingAndSave();
-    console.log(`[Q${questionId}] Recording stopped and saved`);
-
-    if (currentQuestionIndex < totalQuestions - 1) {
-      // Move to next question
-      const nextIndex = currentQuestionIndex + 1;
-      const nextQuestionId = questions[nextIndex].id;
-
-      console.log(`Moving from Q${questionId} to Q${nextQuestionId}`);
-
-      // Set flag to prevent race condition in useEffect
+    try {
+      // Set flag to prevent race conditions
       isNavigatingRef.current = true;
 
-      // Update state in a batch to minimize re-renders
-      setAnswers(updatedAnswers);
-      setCurrentQuestionIndex(nextIndex);
-      setSelectedAnswer(updatedAnswers[nextQuestionId] || '');
+      console.log(`[Q${questionId}] About to stop and save recording...`);
+      // Stop and save current recording with error handling
+      await stopRecordingAndSave();
+      console.log(`[Q${questionId}] Recording stopped and saved`);
 
-      // Wait for state to update, then start recording with NEW question ID
-      setTimeout(() => {
+      if (currentQuestionIndex < totalQuestions - 1) {
+        // Move to next question
+        const nextIndex = currentQuestionIndex + 1;
+        const nextQuestionId = questions[nextIndex].id;
+
+        console.log(`Moving from Q${questionId} to Q${nextQuestionId}`);
+
+        // Update state synchronously to prevent rollback
+        setAnswers(updatedAnswers);
+        setCurrentQuestionIndex(nextIndex);
+        setSelectedAnswer(updatedAnswers[nextQuestionId] || '');
+
+        // Start recording immediately without timeout to reduce race conditions
         console.log(`\n--- Starting new recording for Q${nextQuestionId} ---`);
         console.log(`Stream exists:`, !!streamRef.current);
         console.log(`Stream active:`, streamRef.current?.active);
 
-        if (streamRef.current) {
+        if (streamRef.current && streamRef.current.active) {
           startRecording(streamRef.current, nextQuestionId);
         } else {
           console.error(`No stream available for Q${nextQuestionId}!`);
         }
-      }, 500);
-    } else {
-      console.log('Last question - submitting survey');
-      setAnswers(updatedAnswers);
-      submitSurvey(updatedAnswers);
+      } else {
+        console.log('Last question - submitting survey');
+        setAnswers(updatedAnswers);
+        submitSurvey(updatedAnswers);
+      }
+    } catch (error) {
+      console.error(`[Q${questionId}] Error in handleNext:`, error);
+      // Don't navigate if there's an error
+    } finally {
+      // Reset navigation flag after a short delay
+      setTimeout(() => {
+        isNavigatingRef.current = false;
+      }, 100);
     }
   };
 
@@ -528,7 +579,7 @@ function QuestionnairePage() {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
-        // Start recording with question ID
+        // Start recording with first question ID
         startRecording(stream, questions[0].id);
       } catch (error) {
         console.error('Camera access error:', error);
@@ -552,7 +603,8 @@ function QuestionnairePage() {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   const isAnswered = selectedAnswer !== '';
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
@@ -610,19 +662,31 @@ function QuestionnairePage() {
           </div>
 
           <div className="options-section">
-            <div className="radio-options">
+            <div className="likert-scale">
               {currentQuestion.options.map((option, index) => (
-                <label key={index} className="radio-container">
+                <label
+                  key={index}
+                  className={`likert-option likert-${index + 1}`}
+                  title={option}
+                >
                   <input
                     type="radio"
                     name={`question-${currentQuestion.id}`}
                     value={option}
                     checked={selectedAnswer === option}
                     onChange={() => handleAnswerChange(option)}
-                    className="radio-input"
+                    className="likert-input"
+                    aria-label={option}
                   />
-                  <div className="custom-radio"></div>
-                  <span className="radio-label">{option}</span>
+                  <div className="likert-button">
+                    <div className="face">
+                      <div className="eyes">
+                        <div className="eye"></div>
+                        <div className="eye"></div>
+                      </div>
+                      <div className="mouth"></div>
+                    </div>
+                  </div>
                 </label>
               ))}
             </div>
@@ -641,11 +705,18 @@ function QuestionnairePage() {
 
           <button
             onClick={handleNext}
-            disabled={!isAnswered}
-            className={`next-button-bottom ${isAnswered ? 'enabled' : 'disabled'}`}
+            disabled={!isAnswered || isLoadingPreview}
+            className={`next-button-bottom ${(isAnswered && !isLoadingPreview) ? 'enabled' : 'disabled'}`}
           >
-            {isLastQuestion ? 'Submit Survey' : 'Next →'}
+            {isLoadingPreview ? 'Loading Answers Preview...' : (isLastQuestion ? 'Finish and Check Answers' : 'Next →')}
           </button>
+          
+          {isLoadingPreview && (
+            <div className="loading-message">
+              <p>Processing your responses and preparing the Answers Preview Page...</p>
+              <p>You'll be able to review all your answers before final submission.</p>
+            </div>
+          )}
         </div>
       </div>
 
