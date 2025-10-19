@@ -814,6 +814,7 @@ body:has(.questionnaire-page) {
 
 /* ---------- layout / entrance ---------- */
 .likert-scale {
+  margin-top: 150px;
   display: flex;
   gap: 14px;
   align-items: center;
@@ -821,8 +822,9 @@ body:has(.questionnaire-page) {
   justify-content: center;
   width: 100%;
   max-width: 600px;
-  margin: 0 auto;
   padding: 20px 0;
+
+   
 }
 
 .likert-option {
@@ -855,8 +857,8 @@ body:has(.questionnaire-page) {
   --mouth-height: unset;
   --mouth-border-width: calc(var(--size) * 0.045);
   --mouth-bottom-offset: 24%;
-  width: var(--size);
-  height: var(--size);
+  width: 100px;
+  height: 80px;
   border-radius: 24px;
   border: 3px solid transparent;
   background: var(--likert-color, #e5e7eb);
@@ -917,14 +919,14 @@ body:has(.questionnaire-page) {
   border-color: transparent;
 }
 
-.likert-1 .likert-button {
+.likert-5 .likert-button {
   --likert-color: #e53935;
   --mouth-diameter: calc(var(--size) * 0.7);
   --mouth-border-width: calc(var(--size) * 0.058);
   --mouth-bottom-offset: -65%;
 }
 
-.likert-2 .likert-button {
+.likert-4 .likert-button {
   --likert-color: #f57c00;
   --mouth-diameter: calc(var(--size) * 0.55);
   --mouth-border-width: calc(var(--size) * 0.05);
@@ -939,22 +941,22 @@ body:has(.questionnaire-page) {
   --mouth-bottom-offset: 22%;
 }
 
-.likert-4 .likert-button {
+.likert-2 .likert-button {
   --likert-color: #8bc34a;
   --mouth-diameter: calc(var(--size) * 0.55);
   --mouth-border-width: calc(var(--size) * 0.05);
   --mouth-bottom-offset: 18%;
 }
 
-.likert-5 .likert-button {
+.likert-1 .likert-button {
   --likert-color: #43a047;
   --mouth-diameter: calc(var(--size) * 0.7);
   --mouth-border-width: calc(var(--size) * 0.058);
   --mouth-bottom-offset: 16%;
 }
 
-.likert-1 .mouth::before,
-.likert-2 .mouth::before {
+.likert-5 .mouth::before,
+.likert-4 .mouth::before {
   border-top-color: var(--face-color);
   border-bottom-width: 0;
 }
@@ -968,8 +970,8 @@ body:has(.questionnaire-page) {
   border-width: 0;
 }
 
-.likert-4 .mouth::before,
-.likert-5 .mouth::before {
+.likert-2 .mouth::before,
+.likert-1 .mouth::before {
   border-bottom-color: var(--face-color);
   border-top-width: 0;
 }
