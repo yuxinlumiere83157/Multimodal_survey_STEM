@@ -812,6 +812,20 @@ body:has(.questionnaire-page) {
   font-style: italic;
 }
 
+.reflection-textarea {
+  width: 100%;
+  min-height: 140px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #ccc !important;
+  font-size: 16px;
+  resize: vertical;
+  box-sizing: border-box;
+  background: #fff;
+  color: #333;
+  line-height: 1.5;
+}
+
 /* ---------- layout / entrance ---------- */
 .likert-scale {
   margin-top: 150px;
@@ -872,6 +886,16 @@ body:has(.questionnaire-page) {
     box-shadow .25s cubic-bezier(.2, .7, .2, 1),
     border-color .25s cubic-bezier(.2, .7, .2, 1),
     filter .2s linear;
+}
+
+.likert-button span {
+  color: #1f1f1f;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  max-width: 88px;
+  padding: 0 6px;
+  text-align: center;
 }
 
 /* ---------- the face inside each button ---------- */

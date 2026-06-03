@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
 import './SummaryPage.css';
 import questionnairePreview from '../assets/questionnaire-preview.png';
 
@@ -8,7 +8,7 @@ function SummaryPage() {
       <div className="summary-container">
         
         <Link to="/" className="back-link">
-          ← Back to Home Page
+          Back to Home Page
         </Link>
         
         <h1 className="summary-title">About this survey...</h1>
@@ -23,11 +23,11 @@ function SummaryPage() {
         </div>
         
         <p className="summary-text">
-          This survey is designed to understand the mental health and well-being of university students. 
-          Your responses will help researchers identify patterns in student mental health experiences and 
-          contribute to the development of better support services on campus. The survey takes approximately 
-          10-15 minutes to complete and covers topics related to anxiety, stress, academic pressure, and 
-          general well-being. All responses are completely confidential and will be used solely for research purposes.
+          This ENGE817 pilot study collects momentary stress self-reports, SUS usability responses, trust and
+          privacy perceptions, and open-ended reflections. Webcam-based facial-emotion recording is used only
+          during the stress self-report items so researchers can compare stress ratings with facial-emotion
+          signals. The survey takes approximately 10-15 minutes to complete. All responses are confidential
+          and will be used solely for research purposes.
         </p>
         
         <Link to="/consent" className="proceed-link">

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+﻿from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import cv2
 import mediapipe as mp
@@ -12,6 +12,7 @@ import io
 import os
 import json
 import time
+import re
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
@@ -110,6 +111,118 @@ def display_EMO_PRED(img, box, label='', line_width=2):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+INSTRUMENT_NAME = "ENGE817_stress_SUS_trust_privacy_reflection"
+STRESS_QUESTION_IDS = {"1", "2", "3", "4", "5", "6"}
+STRESS_REVERSE_IDS = {"4", "5"}
+
+
+def extract_numeric_response(answer):
+    """Extract the leading numeric response from Likert strings such as '4 - Agree'."""
+    if answer is None:
+        return None
+    match = re.search(r'\d+(?:\.\d+)?', str(answer))
+    return float(match.group(0)) if match else None
+
+
+def average(values):
+    return round(sum(values) / len(values), 2) if values else 0
+
+
+def question_lookup_from_payload(questions):
+    lookup = {}
+    if isinstance(questions, list):
+        for question in questions:
+            if isinstance(question, dict) and question.get('id') is not None:
+                lookup[str(question.get('id'))] = question
+    return lookup
+
+
+def get_question_meta(question_id, lookup):
+    question_id = str(question_id)
+    if question_id in lookup:
+        return lookup[question_id]
+    if question_id in STRESS_QUESTION_IDS:
+        return {
+            'id': int(question_id),
+            'category': 'Momentary Stress',
+            'construct': 'stress',
+            'reverse': question_id in STRESS_REVERSE_IDS,
+            'type': 'likert',
+            'question': f'Question {question_id}'
+        }
+    return {
+        'id': int(question_id) if question_id.isdigit() else question_id,
+        'category': '',
+        'construct': '',
+        'reverse': False,
+        'type': '',
+        'question': f'Question {question_id}'
+    }
+
+
+def score_enge817_answers(answers, questions):
+    raw_answers = {str(qid): answer for qid, answer in answers.items() if str(qid) != 'sessionId'}
+    lookup = question_lookup_from_payload(questions)
+    scored_answers = {}
+    stress_scores = []
+    sus_contributions = []
+    trust_privacy_scores = []
+    reflection_answers = {}
+
+    question_ids = set(raw_answers.keys()) | set(lookup.keys())
+    for question_id in sorted(question_ids, key=lambda value: int(value) if str(value).isdigit() else str(value)):
+        question = get_question_meta(question_id, lookup)
+        answer = raw_answers.get(str(question_id))
+        construct = question.get('construct')
+        question_type = question.get('type')
+
+        if answer is None:
+            continue
+
+        if question_type == 'text' or construct == 'reflection':
+            reflection_answers[str(question_id)] = {
+                'question': question.get('question', ''),
+                'answer': str(answer)
+            }
+            continue
+
+        numeric = extract_numeric_response(answer)
+        if numeric is None:
+            continue
+
+        score = None
+        if construct == 'stress':
+            score = 4 - numeric if question.get('reverse') else numeric
+            stress_scores.append(score)
+        elif construct == 'sus':
+            score = 5 - numeric if question.get('reverse') else numeric - 1
+            sus_contributions.append(score)
+        elif construct == 'trust_privacy':
+            score = 6 - numeric if question.get('reverse') else numeric
+            trust_privacy_scores.append(score)
+
+        scored_answers[str(question_id)] = {
+            'question': question.get('question', ''),
+            'category': question.get('category', ''),
+            'construct': construct,
+            'reverse': bool(question.get('reverse')),
+            'rawAnswer': answer,
+            'numeric': numeric,
+            'score': round(score, 2) if score is not None else None
+        }
+
+    return {
+        'rawAnswers': raw_answers,
+        'scoredAnswers': scored_answers,
+        'summaryScores': {
+            'stressAverage_0_to_4': average(stress_scores),
+            'susScore_0_to_100': round(sum(sus_contributions) * 2.5, 2) if sus_contributions else 0,
+            'trustPrivacyAverage_1_to_5': average(trust_privacy_scores)
+        },
+        'reflectionAnswers': reflection_answers
+    }
 
 
 # API Endpoints
@@ -305,59 +418,47 @@ def get_emotions():
     
 @app.route('/api/save-survey-answers', methods=['POST'])
 def save_survey_answers():
-    """Save user's survey answers."""
+    """Save ENGE817 study answers and instrument scores."""
     try:
-        import json
-        import time
         data = request.get_json()
         session_id = data.get('sessionId')
         answers = data.get('answers')  # {questionId: answerText}
+        questions = data.get('questions', [])
 
-        # If session_id is missing or empty, use timestamp
         if not session_id:
             session_id = str(int(time.time()))
 
         if not answers or not isinstance(answers, dict):
             return jsonify({'error': 'Answers must be provided as a dictionary'}), 400
 
-        def map_answer(ans):
-            # 5-point scale, leftmost=5, rightmost=1
-            if ans in ["Always", "Extremely in touch", "Full trust", "Extremely satisfied", "Very good", "All the time", "Extremely unbothered", "Full control"]:
-                return 5
-            elif ans in ["Often", "In touch", "Lots of trust", "Satisfied", "Good", "Most of the time", "Unbothered", "Lots of control"]:
-                return 4
-            elif ans in ["Sometimes", "Neutral", "Fair", "About half of the time", "Neutral"]:
-                return 3
-            elif ans in ["Rarely", "Out of touch", "Little trust", "Dissatisfied", "Poor", "Some of the time", "Bothered", "Little control"]:
-                return 2
-            elif ans in ["Never", "Extremely out of touch", "No trust", "Extremely dissatisfied", "Very poor", "None of the time", "Extremely bothered", "No control"]:
-                return 1
-            else:
-                return None
+        scored = score_enge817_answers(answers, questions)
 
-        int_answers = {str(qid): map_answer(ans) for qid, ans in answers.items()}
-
-        # Create session folder in results if not exists
         session_folder = os.path.join(app.config['RESULT_FOLDER'], str(session_id))
         os.makedirs(session_folder, exist_ok=True)
 
-        # Save answers to JSON file
         answers_path = os.path.join(session_folder, 'survey_answers.json')
+        saved_payload = {
+            'sessionId': session_id,
+            'instrument': INSTRUMENT_NAME,
+            'rawAnswers': scored['rawAnswers'],
+            'scoredAnswers': scored['scoredAnswers'],
+            'summaryScores': scored['summaryScores'],
+            'reflectionAnswers': scored['reflectionAnswers'],
+            'questions': questions
+        }
+
         with open(answers_path, 'w') as f:
-            json.dump({
-                'sessionId': session_id,
-                'answers': int_answers
-            }, f, indent=2)
+            json.dump(saved_payload, f, indent=2)
 
         return jsonify({
             'success': True,
             'message': 'Survey answers saved successfully',
             'sessionId': session_id,
-            'answersPath': answers_path
+            'answersPath': answers_path,
+            'summaryScores': scored['summaryScores']
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
 
 
 @app.route('/api/save-question-video', methods=['POST'])
@@ -456,132 +557,121 @@ def save_question_video():
 @app.route('/api/analyze-survey-results', methods=['POST'])
 def analyze_survey_results():
     """
-    Analyze survey results by comparing questionnaire answers with detected emotions.
-    Returns both the questionnaire-based result and AI-analyzed result with confidence scores.
+    Analyze ENGE817 stress self-report against facial emotion data from stress items only.
     """
     try:
         data = request.get_json()
         session_id = data.get('sessionId')
         answers = data.get('answers')  # {questionId: answerText}
+        questions = data.get('questions', [])
 
         if not session_id or not answers:
             return jsonify({'error': 'sessionId and answers are required'}), 400
 
-        # === 1. Calculate Questionnaire-Based Result ===
-        def map_answer_to_score(ans):
-            """Map answer text to 1-5 scale (5=positive, 1=negative)"""
-            if ans in ["Always", "Extremely in touch", "Full trust", "Extremely satisfied", "Very good", "All the time", "Extremely unbothered", "Full control"]:
-                return 5
-            elif ans in ["Often", "In touch", "Lots of trust", "Satisfied", "Good", "Most of the time", "Unbothered", "Lots of control"]:
-                return 4
-            elif ans in ["Sometimes", "Neutral", "Fair", "About half of the time"]:
-                return 3
-            elif ans in ["Rarely", "Out of touch", "Little trust", "Dissatisfied", "Poor", "Some of the time", "Bothered", "Little control"]:
-                return 2
-            elif ans in ["Never", "Extremely out of touch", "No trust", "Extremely dissatisfied", "Very poor", "None of the time", "Extremely bothered", "No control"]:
-                return 1
-            else:
-                return 3  # Default to neutral
+        scored = score_enge817_answers(answers, questions)
+        stress_average = scored['summaryScores']['stressAverage_0_to_4']
 
-        scores = [map_answer_to_score(ans) for ans in answers.values()]
-        avg_score = sum(scores) / len(scores) if scores else 3
-
-        # Determine questionnaire result and confidence
-        if avg_score >= 4.0:
-            questionnaire_result = "Happy"
-            questionnaire_confidence = min(((avg_score - 4.0) / 1.0) * 50 + 50, 100)
-        elif avg_score >= 3.0:
-            questionnaire_result = "Neutral"
-            questionnaire_confidence = 100 - abs(avg_score - 3.5) * 50
+        if stress_average >= 3.0:
+            stress_level = 'High stress'
+        elif stress_average >= 2.0:
+            stress_level = 'Moderate stress'
         else:
-            questionnaire_result = "Unhappy"
-            questionnaire_confidence = min(((3.0 - avg_score) / 2.0) * 50 + 50, 100)
+            stress_level = 'Low stress'
 
-        # === 2. Analyze Emotion Data from Videos ===
+        stress_question_ids = sorted(
+            [qid for qid, question in question_lookup_from_payload(questions).items()
+             if question.get('construct') == 'stress'],
+            key=lambda value: int(value) if str(value).isdigit() else str(value)
+        ) or ['1', '2', '3', '4', '5', '6']
+
+        stress_question_ids = [qid for qid in stress_question_ids if qid in STRESS_QUESTION_IDS]
         session_folder = os.path.join(app.config['QUESTION_VIDEOS_FOLDER'], str(session_id))
 
-        if not os.path.exists(session_folder):
-            return jsonify({'error': 'Session data not found'}), 404
-
-        # Collect all emotion data
         all_emotions = []
-        emotion_files = [f for f in os.listdir(session_folder) if f.endswith('_emotions.json')]
+        valid_files = []
+        missing_files = []
 
-        for emotion_file in emotion_files:
-            with open(os.path.join(session_folder, emotion_file), 'r') as f:
+        for question_id in ['1', '2', '3', '4', '5', '6']:
+            emotion_filename = f'question_{question_id}_emotions.json'
+            emotion_path = os.path.join(session_folder, emotion_filename)
+
+            if not os.path.exists(emotion_path):
+                missing_files.append(emotion_filename)
+                continue
+
+            valid_files.append(emotion_filename)
+            with open(emotion_path, 'r') as f:
                 emotion_info = json.load(f)
                 timeline = emotion_info.get('emotionTimeline', [])
-                all_emotions.extend([e['emotion'] for e in timeline])
+                for item in timeline:
+                    emotion = item.get('emotion') if isinstance(item, dict) else None
+                    if emotion:
+                        all_emotions.append(emotion)
 
-        # Count emotions
         emotion_counts = {}
         for emotion in all_emotions:
             emotion_counts[emotion] = emotion_counts.get(emotion, 0) + 1
 
         total_samples = len(all_emotions)
-
-        # Calculate emotion percentages
         emotion_percentages = {
-            emotion: (count / total_samples * 100) if total_samples > 0 else 0
+            emotion: round((count / total_samples * 100), 2) if total_samples > 0 else 0
             for emotion, count in emotion_counts.items()
         }
 
-        # Classify emotions as positive, neutral, or negative
         positive_emotions = ['Happiness', 'Surprise']
         neutral_emotions = ['Neutral']
         negative_emotions = ['Sadness', 'Fear', 'Disgust', 'Anger']
 
-        positive_pct = sum(emotion_percentages.get(e, 0) for e in positive_emotions)
-        neutral_pct = sum(emotion_percentages.get(e, 0) for e in neutral_emotions)
-        negative_pct = sum(emotion_percentages.get(e, 0) for e in negative_emotions)
+        positive_pct = round(sum(emotion_percentages.get(e, 0) for e in positive_emotions), 2)
+        neutral_pct = round(sum(emotion_percentages.get(e, 0) for e in neutral_emotions), 2)
+        negative_pct = round(sum(emotion_percentages.get(e, 0) for e in negative_emotions), 2)
 
-        # Determine AI-analyzed result
-        if positive_pct > negative_pct and positive_pct > neutral_pct:
-            ai_result = "Happy"
-            ai_confidence = min(positive_pct, 100)
-        elif negative_pct > positive_pct and negative_pct > neutral_pct:
-            ai_result = "Unhappy"
-            ai_confidence = min(negative_pct, 100)
+        if total_samples == 0:
+            facial_pattern = 'Unavailable'
+            discrepancy_detected = False
+            comparison_note = 'Facial data unavailable or insufficient.'
         else:
-            ai_result = "Neutral"
-            ai_confidence = min(neutral_pct, 100)
-
-        # === 3. Detect Discrepancy ===
-        discrepancy_detected = questionnaire_result != ai_result
-
-        # Calculate discrepancy severity (0-100)
-        discrepancy_score = 0
-        if discrepancy_detected:
-            # High discrepancy if results are opposite (Happy vs Unhappy)
-            if (questionnaire_result == "Happy" and ai_result == "Unhappy") or \
-               (questionnaire_result == "Unhappy" and ai_result == "Happy"):
-                discrepancy_score = 100
+            if negative_pct >= neutral_pct and negative_pct >= positive_pct:
+                facial_pattern = 'Mostly negative facial-emotion signals'
+            elif positive_pct >= neutral_pct and positive_pct >= negative_pct:
+                facial_pattern = 'Mostly positive facial-emotion signals'
             else:
-                # Moderate discrepancy if one is Neutral
-                discrepancy_score = 50
+                facial_pattern = 'Mostly neutral facial expressions'
+
+            if stress_level == 'High stress' and neutral_pct >= 50:
+                discrepancy_detected = True
+                comparison_note = 'High self-reported stress was paired with mostly neutral facial expressions.'
+            elif stress_level == 'Low stress' and negative_pct >= 25:
+                discrepancy_detected = True
+                comparison_note = 'Low self-reported stress was paired with noticeable negative facial-emotion signals.'
+            else:
+                discrepancy_detected = False
+                comparison_note = 'No strong discrepancy detected at session level.'
 
         return jsonify({
             'success': True,
-            'questionnaire': {
-                'result': questionnaire_result,
-                'confidence': round(questionnaire_confidence, 2),
-                'averageScore': round(avg_score, 2)
+            'selfReport': {
+                'instrument': 'Momentary stress items',
+                'stressAverage_0_to_4': stress_average,
+                'stressLevel': stress_level,
+                'stressQuestionIds': stress_question_ids
             },
-            'ai_analysis': {
-                'result': ai_result,
-                'confidence': round(ai_confidence, 2),
-                'emotion_breakdown': {
-                    'positive': round(positive_pct, 2),
-                    'neutral': round(neutral_pct, 2),
-                    'negative': round(negative_pct, 2)
+            'facialEmotion': {
+                'facialPattern': facial_pattern,
+                'emotionCounts': emotion_counts,
+                'emotionPercentages': emotion_percentages,
+                'emotionBreakdown': {
+                    'positive': positive_pct,
+                    'neutral': neutral_pct,
+                    'negative': negative_pct
                 },
-                'emotion_counts': emotion_counts,
-                'total_samples': total_samples
+                'totalSamples': total_samples,
+                'validStressQuestionFiles': valid_files,
+                'missingStressQuestionFiles': missing_files
             },
-            'discrepancy': {
-                'detected': discrepancy_detected,
-                'severity': discrepancy_score,
-                'message': f"Your questionnaire suggests you are {questionnaire_result.lower()}, but your facial expressions during the survey suggest you might be {ai_result.lower()}." if discrepancy_detected else "Your answers align with your emotional expressions."
+            'comparison': {
+                'discrepancyDetected': discrepancy_detected,
+                'note': comparison_note
             }
         })
 
@@ -590,6 +680,7 @@ def analyze_survey_results():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5006)
+
+

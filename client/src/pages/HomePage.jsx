@@ -15,12 +15,12 @@ function HomePage() {
       <div className="content-container">
         <main className="main-content">
           <h1 className="headline">
-            Understanding Student Mental Health and Well-being
+            ENGE817 Stress, Usability, and Trust Pilot Study
           </h1>
           
           <p className="subtext">
-            Your participation in this research helps us better understand the mental health challenges 
-            faced by students and contributes to developing better support systems.
+            Your participation helps us study prototype usability, momentary stress self-reporting, 
+            and trust and privacy perceptions around webcam-based emotion detection.
           </p>
           
           <Link to="/summary" className="cta-link">

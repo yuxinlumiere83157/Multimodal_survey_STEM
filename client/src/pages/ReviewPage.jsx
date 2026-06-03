@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+﻿import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { STUDY_QUESTIONS } from '../studyQuestions';
 import './ReviewPage.css';
 
 function ReviewPage() {
@@ -13,11 +14,15 @@ function ReviewPage() {
     }
     // Return test data for demonstration
     return {
-      1: "Often",
-      2: "Lots of trust",
-      3: "Satisfied", 
-      4: "Satisfied",
-      5: "Sometimes"
+      1: "2 - Sometimes",
+      2: "3 - Fairly often",
+      3: "2 - Sometimes",
+      4: "3 - Fairly often",
+      5: "4 - Very often",
+      7: "4 - Agree",
+      8: "2 - Disagree",
+      17: "4 - Agree",
+      22: "I felt aware of my stress level during the check-in."
     };
   }, [location.state]);
 
@@ -25,14 +30,7 @@ function ReviewPage() {
     if (location.state?.questions && location.state.questions.length > 0) {
       return location.state.questions;
     }
-    // Return test questions for demonstration
-    return [
-      {id: 1, category: "Satisfaction", question: "How in touch are you with your positive emotions?", options: ["Extremely in touch", "In touch", "Neutral", "Out of touch", "Extremely out of touch"]},
-      {id: 2, category: "Satisfaction", question: "How much do you trust your skills and capabilities?", options: ["Full trust", "Lots of trust", "Neutral", "Little trust", "No trust"]},
-      {id: 3, category: "Satisfaction", question: "How satisfied are you with the support you get from your friends?", options: ["Extremely satisfied", "Satisfied", "Neutral", "Dissatisfied", "Extremely dissatisfied"]},
-      {id: 4, category: "Satisfaction", question: "How satisfied are you with the support you get from your family?", options: ["Extremely satisfied", "Satisfied", "Neutral", "Dissatisfied", "Extremely dissatisfied"]},
-      {id: 5, category: "Satisfaction", question: "How often do you positively think of the future?", options: ["Always", "Often", "Sometimes", "Rarely", "Never"]}
-    ];
+    return STUDY_QUESTIONS;
   }, [location.state]);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(true);
@@ -75,7 +73,8 @@ function ReviewPage() {
           },
           body: JSON.stringify({
             sessionId: sessionId,
-            answers: answers
+            answers: answers,
+            questions: questions
           })
         });
 
@@ -96,7 +95,7 @@ function ReviewPage() {
     };
 
     fetchAnalysis();
-  }, [answers, location.state]);
+  }, [answers, location.state, questions]);
 
   const handleSubmit = async () => {
     // Get sessionId from state or create a new one
@@ -142,7 +141,7 @@ function ReviewPage() {
 
   const handleEditClick = () => {
     // Navigate back to questionnaire with current answers
-    navigate('/questionnaire', { state: { answers, questions } });
+    navigate('/questionnaire', { state: { answers, questions, sessionId: location.state?.sessionId } });
   };
 
   // Get answered questions
@@ -159,7 +158,7 @@ function ReviewPage() {
         {/* Header */}
         <div className="review-header">
           <button onClick={handleEditClick} className="back-link">
-            ← Back to Survey
+            Back to Survey
           </button>
         </div>
 
@@ -180,6 +179,7 @@ function ReviewPage() {
                     <div className="question-number-badge">{index + 1}</div>
                     <div className="question-content">
                       <div className="question-category">{question.category}</div>
+                      <div className="question-construct">{question.construct}</div>
                       <div className="question-preview">
                         {question.question.length > 80
                           ? `${question.question.substring(0, 80)}...`
@@ -209,39 +209,39 @@ function ReviewPage() {
               <>
                 <h2>Analysis Results</h2>
 
-                {/* Questionnaire-Based Result */}
+                {/* Stress Self-Report Result */}
                 <div className="result-section">
-                  <h3>Questionnaire-Based Result</h3>
+                  <h3>Stress Self-Report</h3>
                   <div className="result-content">
-                    <div className="result-label">Result: <strong>{analysisResult.questionnaire?.result}</strong></div>
-                    <div className="result-label">Confidence: <strong>{analysisResult.questionnaire?.confidence}%</strong></div>
-                    <div className="result-label">Average Score: <strong>{analysisResult.questionnaire?.averageScore}</strong></div>
+                    <div className="result-label">Instrument: <strong>{analysisResult.selfReport?.instrument}</strong></div>
+                    <div className="result-label">Stress Level: <strong>{analysisResult.selfReport?.stressLevel}</strong></div>
+                    <div className="result-label">Average Score: <strong>{analysisResult.selfReport?.stressAverage_0_to_4}</strong></div>
                   </div>
                 </div>
 
-                {/* AI-Analyzed Result */}
+                {/* Facial Emotion Result */}
                 <div className="result-section">
-                  <h3>AI-Analyzed Result (Facial Expression)</h3>
+                  <h3>Facial Emotion During Stress Items</h3>
                   <div className="result-content">
-                    <div className="result-label">Result: <strong>{analysisResult.ai_analysis?.result}</strong></div>
-                    <div className="result-label">Confidence: <strong>{analysisResult.ai_analysis?.confidence}%</strong></div>
+                    <div className="result-label">Pattern: <strong>{analysisResult.facialEmotion?.facialPattern}</strong></div>
+                    <div className="result-label">Total Samples: <strong>{analysisResult.facialEmotion?.totalSamples}</strong></div>
 
                     <div className="emotion-breakdown">
                       <h4>Emotion Breakdown:</h4>
-                      <div className="result-label">Positive: {analysisResult.ai_analysis?.emotion_breakdown?.positive}%</div>
-                      <div className="result-label">Neutral: {analysisResult.ai_analysis?.emotion_breakdown?.neutral}%</div>
-                      <div className="result-label">Negative: {analysisResult.ai_analysis?.emotion_breakdown?.negative}%</div>
+                      <div className="result-label">Positive: {analysisResult.facialEmotion?.emotionBreakdown?.positive}%</div>
+                      <div className="result-label">Neutral: {analysisResult.facialEmotion?.emotionBreakdown?.neutral}%</div>
+                      <div className="result-label">Negative: {analysisResult.facialEmotion?.emotionBreakdown?.negative}%</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Discrepancy Detection */}
-                {analysisResult.discrepancy?.detected && (
+                {analysisResult.comparison && (
                   <div className="discrepancy-section">
-                    <h3>⚠️ Discrepancy Detected</h3>
+                    <h3>Session-Level Comparison</h3>
                     <div className="result-content">
-                      <div className="result-label">Severity: <strong>{analysisResult.discrepancy?.severity}%</strong></div>
-                      <p className="discrepancy-message">{analysisResult.discrepancy?.message}</p>
+                      <div className="result-label">Discrepancy Detected: <strong>{analysisResult.comparison?.discrepancyDetected ? 'Yes' : 'No'}</strong></div>
+                      <p className="discrepancy-message">{analysisResult.comparison?.note}</p>
                     </div>
                   </div>
                 )}
@@ -271,3 +271,4 @@ function ReviewPage() {
 }
 
 export default ReviewPage;
+

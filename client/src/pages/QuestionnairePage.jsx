@@ -1,6 +1,7 @@
-
+﻿
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { STUDY_QUESTIONS } from '../studyQuestions';
 import './QuestionnairePage.css';
 
 function QuestionnairePage() {
@@ -19,6 +20,7 @@ function QuestionnairePage() {
   const [currentEmotion, setCurrentEmotion] = useState(null);
   const [emotionData, setEmotionData] = useState([]);
   const [sessionId, setSessionId] = useState(null);
+  const sessionIdRef = useRef(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const location = useLocation();
 
@@ -26,128 +28,8 @@ function QuestionnairePage() {
   const recordingQuestionIdRef = useRef(null);
   const isNavigatingRef = useRef(false);
 
-  const [questions] = useState([
-    {
-      id: 1,
-      category: "Satisfaction",
-      question: "How in touch are you with your positive emotions?",
-      options: ["Extremely in touch", "In touch", "Neutral", "Out of touch", "Extremely out of touch"]
-    },
-    {
-      id: 2,
-      category: "Satisfaction",
-      question: "How much do you trust your skills and capabilities?",
-      options: ["Full trust", "Lots of trust", "Neutral", "Little trust", "No trust"]
-    },
-    {
-      id: 3,
-      category: "Satisfaction",
-      question: "How satisfied are you with the support you get from your friends?",
-      options: ["Extremely satisfied", "Satisfied", "Neutral", "Dissatisfied", "Extremely dissatisfied"]
-    },
-    {
-      id: 4,
-      category: "Satisfaction",
-      question: "How satisfied are you with the support you get from your family?",
-      options: ["Extremely satisfied", "Satisfied", "Neutral", "Dissatisfied", "Extremely dissatisfied"]
-    },
-    {
-      id: 5,
-      category: "Satisfaction",
-      question: "How often do you positively think of the future?",
-      options: ["Always", "Often", "Sometimes", "Rarely", "Never"]
-    },
-    {
-      id: 6,
-      category: "Self-Management",
-      question: "How would you rate your ability to deal with personal problems?",
-      options: ["Very good", "Good", "Fair", "Poor", "Very poor"]
-    },
-    {
-      id: 7,
-      category: "Self-Management",
-      question: "How would you rate your ability to organize your thoughts?",
-      options: ["Very good", "Good", "Fair", "Poor", "Very poor"]
-    },
-    {
-      id: 8,
-      category: "Self-Management",
-      question: "How much control do you feel you have on important aspects of your life?",
-      options: ["Full control", "Lots of control", "Neutral", "Little control", "No control"]
-    },
-    {
-      id: 9,
-      category: "Quality Rest",
-      question: "How in touch are you with your inner peace?",
-      options: ["Extremely in touch", "In touch", "Neutral", "Out of touch", "Extremely out of touch"]
-    },
-    {
-      id: 10,
-      category: "Quality Rest",
-      question: "How often do you sleep 7-9 hours a day?",
-      options: ["Always", "Often", "Sometimes", "Rarely", "Never"]
-    },
-    {
-      id: 11,
-      category: "Quality Rest",
-      question: "How often are you able to focus or concentrate on something?",
-      options: ["Always", "Often", "Sometimes", "Rarely", "Never"]
-    },
-    {
-      id: 12,
-      category: "Quality Rest",
-      question: "How often do you plan ahead to avoid stressful situations?",
-      options: ["Always", "Often", "Sometimes", "Rarely", "Never"]
-    },
-    {
-      id: 13,
-      category: "Quality Rest",
-      question: "How often do you prioritize doing tasks, and thinking of a solution, instead of letting stress and emotions affect you?",
-      options: ["Always", "Often", "Sometimes", "Rarely", "Never"]
-    },
-    {
-      id: 14,
-      category: "Quality Rest",
-      question: "How often do you take a much needed break, instead of letting stress and emotions affect you?",
-      options: ["Always", "Often", "Sometimes", "Rarely", "Never"]
-    },
-    {
-      id: 15,
-      category: "Productivity",
-      question: "How much do you enjoy your daily routine?",
-      options: ["Extremely satisfied", "Satisfied", "Neutral", "Dissatisfied", "Extremely dissatisfied"]
-    },
-    {
-      id: 16,
-      category: "Productivity",
-      question: "How much do you feel unbothered about daily challenges?",
-      options: ["Extremely unbothered", "Unbothered", "Neutral", "Bothered", "Extremely bothered"]
-    },
-    {
-      id: 17,
-      category: "Productivity",
-      question: "How much time do you spend on leisurely activities?",
-      options: ["All the time", "Most of the time", "About half of the time", "Some of the time", "None of the time"]
-    },
-    {
-      id: 18,
-      category: "Productivity",
-      question: "How much time do you spend on quality time with friends and family?",
-      options: ["All the time", "Most of the time", "About half of the time", "Some of the time", "None of the time"]
-    },
-    {
-      id: 19,
-      category: "Productivity",
-      question: "How often are you free from situations under time pressure?",
-      options: ["Always", "Often", "Sometimes", "Rarely", "Never"]
-    },
-    {
-      id: 20,
-      category: "Productivity",
-      question: "How often do you feel unbothered about unexpected events?",
-      options: ["Always", "Often", "Sometimes", "Rarely", "Never"]
-    }
-  ]);
+  const [questions] = useState(STUDY_QUESTIONS);
+  const shouldRecordQuestion = (question) => question?.recordEmotion === true;
 
   const currentQuestion = questions[currentQuestionIndex];
   const totalQuestions = questions.length;
@@ -156,6 +38,10 @@ function QuestionnairePage() {
   useEffect(() => {
     if (location.state?.answers) {
       setAnswers(location.state.answers);
+    }
+    if (location.state?.sessionId) {
+      sessionIdRef.current = location.state.sessionId;
+      setSessionId(location.state.sessionId);
     }
   }, [location.state]);
 
@@ -404,8 +290,8 @@ function QuestionnairePage() {
     formData.append('emotion', dominantEmotion);
     formData.append('emotionData', JSON.stringify(emotionData));
 
-    if (sessionId) {
-      formData.append('sessionId', sessionId);
+    if (sessionIdRef.current || sessionId) {
+      formData.append('sessionId', sessionIdRef.current || sessionId);
     }
 
     try {
@@ -425,9 +311,12 @@ function QuestionnairePage() {
       const result = await response.json();
       console.log(`[Q${questionId}] Server response:`, result);
 
-      if (result.sessionId && !sessionId) {
-        setSessionId(result.sessionId);
-        console.log('Session ID set:', result.sessionId);
+      if (result.sessionId) {
+        sessionIdRef.current = result.sessionId;
+        if (!sessionId) {
+          setSessionId(result.sessionId);
+          console.log('Session ID set:', result.sessionId);
+        }
       }
     } catch (error) {
       console.error(`[Q${questionId}] Error saving video (survey will continue):`, error);
@@ -469,7 +358,7 @@ function QuestionnairePage() {
       state: {
         answers: finalAnswers,
         questions: questions,
-        sessionId: sessionId
+        sessionId: sessionIdRef.current || sessionId
       }
     });
   };
@@ -493,15 +382,18 @@ function QuestionnairePage() {
       // Set flag to prevent race conditions
       isNavigatingRef.current = true;
 
-      console.log(`[Q${questionId}] About to stop and save recording...`);
-      // Stop and save current recording with error handling
-      await stopRecordingAndSave();
-      console.log(`[Q${questionId}] Recording stopped and saved`);
+      if (shouldRecordQuestion(currentQuestion) || isRecording) {
+        console.log(`[Q${questionId}] About to stop and save recording...`);
+        // Stop and save current recording with error handling
+        await stopRecordingAndSave();
+        console.log(`[Q${questionId}] Recording stopped and saved`);
+      }
 
       if (currentQuestionIndex < totalQuestions - 1) {
         // Move to next question
         const nextIndex = currentQuestionIndex + 1;
-        const nextQuestionId = questions[nextIndex].id;
+        const nextQuestion = questions[nextIndex];
+        const nextQuestionId = nextQuestion.id;
 
         console.log(`Moving from Q${questionId} to Q${nextQuestionId}`);
 
@@ -510,15 +402,20 @@ function QuestionnairePage() {
         setCurrentQuestionIndex(nextIndex);
         setSelectedAnswer(updatedAnswers[nextQuestionId] || '');
 
-        // Start recording immediately without timeout to reduce race conditions
-        console.log(`\n--- Starting new recording for Q${nextQuestionId} ---`);
-        console.log(`Stream exists:`, !!streamRef.current);
-        console.log(`Stream active:`, streamRef.current?.active);
+        if (shouldRecordQuestion(nextQuestion)) {
+          console.log(`\n--- Starting new recording for Q${nextQuestionId} ---`);
+          console.log(`Stream exists:`, !!streamRef.current);
+          console.log(`Stream active:`, streamRef.current?.active);
 
-        if (streamRef.current && streamRef.current.active) {
-          startRecording(streamRef.current, nextQuestionId);
+          if (streamRef.current && streamRef.current.active) {
+            startRecording(streamRef.current, nextQuestionId);
+          } else {
+            console.error(`No stream available for Q${nextQuestionId}!`);
+          }
         } else {
-          console.error(`No stream available for Q${nextQuestionId}!`);
+          setCurrentEmotion(null);
+          setEmotionData([]);
+          console.log(`Q${nextQuestionId} does not require facial recording.`);
         }
       } else {
         console.log('Last question - submitting survey');
@@ -536,16 +433,31 @@ function QuestionnairePage() {
     }
   };
 
-  const handlePrevious = () => {
+  const handlePrevious = async () => {
     if (currentQuestionIndex > 0) {
+      if (shouldRecordQuestion(currentQuestion) || isRecording) {
+        await stopRecordingAndSave();
+      }
+
       const prevIndex = currentQuestionIndex - 1;
-      const prevQuestionId = questions[prevIndex].id;
+      const prevQuestion = questions[prevIndex];
+      const prevQuestionId = prevQuestion.id;
 
       // Set flag to prevent race condition in useEffect
       isNavigatingRef.current = true;
 
       setCurrentQuestionIndex(prevIndex);
       setSelectedAnswer(answers[prevQuestionId] || '');
+
+      if (shouldRecordQuestion(prevQuestion)) {
+        if (streamRef.current && streamRef.current.active) {
+          startRecording(streamRef.current, prevQuestionId);
+        }
+      } else {
+        setCurrentEmotion(null);
+        setEmotionData([]);
+        console.log(`Q${prevQuestionId} does not require facial recording.`);
+      }
     }
   };
 
@@ -579,8 +491,9 @@ function QuestionnairePage() {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
-        // Start recording with first question ID
-        startRecording(stream, questions[0].id);
+        if (shouldRecordQuestion(questions[0])) {
+          startRecording(stream, questions[0].id);
+        }
       } catch (error) {
         console.error('Camera access error:', error);
       }
@@ -606,7 +519,7 @@ function QuestionnairePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
-  const isAnswered = selectedAnswer !== '';
+  const isAnswered = selectedAnswer.trim() !== '';
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
 
   if (!currentQuestion) {
@@ -620,7 +533,7 @@ function QuestionnairePage() {
 
         <div className="questionnaire-header">
           <button onClick={handleQuitClick} className="quit-link">
-            ← Quit Survey
+            Quit Survey
           </button>
           {currentEmotion && (
             <div className="emotion-indicator">
@@ -662,34 +575,38 @@ function QuestionnairePage() {
           </div>
 
           <div className="options-section">
-            <div className="likert-scale">
-              {currentQuestion.options.map((option, index) => (
-                <label
-                  key={index}
-                  className={`likert-option likert-${index + 1}`}
-                  title={option}
-                >
-                  <input
-                    type="radio"
-                    name={`question-${currentQuestion.id}`}
-                    value={option}
-                    checked={selectedAnswer === option}
-                    onChange={() => handleAnswerChange(option)}
-                    className="likert-input"
-                    aria-label={option}
-                  />
-                  <div className="likert-button">
-                    <div className="face">
-                      <div className="eyes">
-                        <div className="eye"></div>
-                        <div className="eye"></div>
-                      </div>
-                      <div className="mouth"></div>
+            {currentQuestion.type === 'text' ? (
+              <textarea
+                value={selectedAnswer}
+                onChange={(e) => handleAnswerChange(e.target.value)}
+                placeholder="Type your response here..."
+                rows={6}
+                className="reflection-textarea"
+              />
+            ) : (
+              <div className="likert-scale">
+                {(currentQuestion.options || []).map((option, index) => (
+                  <label
+                    key={option}
+                    className={`likert-option likert-${index + 1}`}
+                    title={option}
+                  >
+                    <input
+                      type="radio"
+                      name={`question-${currentQuestion.id}`}
+                      value={option}
+                      checked={selectedAnswer === option}
+                      onChange={() => handleAnswerChange(option)}
+                      className="likert-input"
+                      aria-label={option}
+                    />
+                    <div className="likert-button">
+                      <span>{option}</span>
                     </div>
-                  </div>
-                </label>
-              ))}
-            </div>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -699,7 +616,7 @@ function QuestionnairePage() {
               onClick={handlePrevious}
               className="previous-button-bottom"
             >
-              ← Previous
+              Previous
             </button>
           )}
 
@@ -708,7 +625,7 @@ function QuestionnairePage() {
             disabled={!isAnswered || isLoadingPreview}
             className={`next-button-bottom ${(isAnswered && !isLoadingPreview) ? 'enabled' : 'disabled'}`}
           >
-            {isLoadingPreview ? 'Loading Answers Preview...' : (isLastQuestion ? 'Finish and Check Answers' : 'Next →')}
+            {isLoadingPreview ? 'Loading Answers Preview...' : (isLastQuestion ? 'Finish and Check Answers' : 'Next')}
           </button>
           
           {isLoadingPreview && (
@@ -749,3 +666,5 @@ function QuestionnairePage() {
 }
 
 export default QuestionnairePage;
+
+
