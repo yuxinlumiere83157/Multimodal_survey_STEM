@@ -1,115 +1,221 @@
-# CS705 Group 7 - Real‑Time Survey Emotion Recognition System
+# ENGE817 Multimodal Stress, Usability, and Trust Pilot Study
 
 ## Overview
 
-This project is a multimodal emotion‑recognition project consisting of a Python/Flask API and a React front‑end. The system uses Google’s MediaPipe to detect faces and extract facial landmarks, and a pre‑trained PyTorch model (packaged as a TorchScript file) to classify expressions into seven emotions: neutral, happiness, sadness, surprise, fear, disgust and anger. The API supports both single‑frame and video analysis and is designed to run locally for research or demonstration purposes. A web user interface allows participants to answer a questionnaire while their facial expressions are recorded and analysed.
+This project is a React + Flask prototype for an ENGE817 pilot study. It was adapted from an earlier multimodal survey and facial-emotion recognition project. The previous version used a general wellbeing questionnaire; the current version collects ENGE817 study instruments:
 
-## Features
+- Momentary stress self-report items for RQ2.
+- SUS-style usability items for RQ1.
+- Trust and privacy Likert items for RQ3.
+- Open-ended reflection prompts for RQ2 and RQ3.
 
-- **Real‑time face detection and emotion classification** – The system detects faces in each frame and crops the facial region for analysis. The cropped face is then fed to a TorchScript model trained to recognise facial emotions; predictions include per‑emotion probabilities and bounding boxes.
-- **Video and frame analysis APIs** – REST endpoints allow clients to analyse a single image frame (as base64) or an uploaded video. The API returns the detected emotions for each face along with a processed image or a processed video file.
-- **Session‑based video recording** – When used with the provided front‑end, each survey question records a short video. Each video is saved alongside JSON metadata describing the dominant emotion and an emotion timeline. Files are organised by session ID for easy retrieval.
-- **Survey integration** – Additional endpoints permit saving Likert‑scale questionnaire responses. Responses are mapped to numerical scores and stored with the session.
-- **Cross‑origin support** – CORS is enabled by default so the API can be accessed from a locally hosted web application.
+The system still includes webcam-based facial-emotion recognition, but facial recording is now used only for the momentary stress questions. SUS, trust/privacy, and reflection questions do not record facial emotion.
+
+## Current Study Flow
+
+The questionnaire contains 24 questions:
+
+| Question range | Instrument | Scale/type | Facial recording |
+| --- | --- | --- | --- |
+| Q1-Q6 | Momentary stress self-report | 0-4 Likert | Yes |
+| Q7-Q16 | SUS usability | 1-5 Likert | No |
+| Q17-Q21 | Trust/privacy perceptions | 1-5 Likert | No |
+| Q22-Q24 | Open-ended reflection | Text | No |
+
+The purpose of the prototype is to support these research questions:
+
+- **RQ1:** How usable is the prototype?
+- **RQ2:** What is the relationship between momentary stress self-report and facial emotion during stress items?
+- **RQ3:** What trust and privacy concerns arise around webcam-based emotion detection?
+
+## Key Changes From the Previous Version
+
+- Replaced the old 20-item wellbeing questionnaire with ENGE817 instruments.
+- Added `client/src/studyQuestions.js` as the shared source of truth for all questionnaire items.
+- Updated the questionnaire page so only stress items record webcam video and emotion timelines.
+- Added text-entry support for open-ended reflection prompts.
+- Updated the review page to display category, construct, question text, and answer for Likert and text responses.
+- Updated `/api/save-survey-answers` to save raw answers, scored answers, summary scores, reflection answers, and question metadata.
+- Updated `/api/analyze-survey-results` to compare stress self-report only with emotion data from Q1-Q6.
+- Updated visible app copy so the project is no longer presented as a wellbeing questionnaire.
 
 ## Architecture
 
-The system is divided into two components:
-
 | Component | Description |
 | --- | --- |
-| **Flask API (`API.py`)** | Implements REST endpoints for health checking, analysing a single frame (`/api/analyse‑frame`), analysing uploaded videos (`/api/analyse‑video`), saving question‑specific videos (`/api/save‑question‑video`), saving survey responses (`/api/save‑survey‑answers`), and downloading processed videos.  It uses MediaPipe Face Mesh for face detection and a TorchScript model for emotion classification. |
-| **React Front‑end (`client/`)** | Provides user pages for consent, webcam preview, questionnaire, review and summary.  It uses the browser’s MediaRecorder API to capture video snippets while participants answer questions.  Every 500 ms it sends a frame to the `/api/analyse‑frame` endpoint to obtain the current emotion and displays it in the UI. |
+| **Flask API (`API.py`)** | Provides health checks, frame analysis, video analysis, question-video saving, ENGE817 survey-answer saving, and stress/facial-emotion comparison. |
+| **React frontend (`client/`)** | Provides the participant flow: home, summary, consent, webcam preview, questionnaire, review, and completion pages. |
+| **Study questions (`client/src/studyQuestions.js`)** | Defines all ENGE817 questions, constructs, scoring metadata, question types, and whether each question records emotion. |
+
+## Backend Endpoints
+
+The existing emotion-recognition endpoints are preserved:
+
+- `GET /api/health`
+- `POST /api/analyze-frame`
+- `POST /api/analyze-video`
+- `POST /api/save-question-video`
+- `GET /api/download/<filename>`
+- `GET /api/emotions`
+
+ENGE817 survey endpoints:
+
+- `POST /api/save-survey-answers`
+- `POST /api/analyze-survey-results`
+
+## Scoring
+
+### Stress
+
+Stress items use a 0-4 scale. Higher final scores indicate higher stress.
+
+- Normal items: `score = numeric`
+- Reverse-coded stress items: `score = 4 - numeric`
+- Summary: `stressAverage_0_to_4`
+
+### SUS
+
+SUS items use a 1-5 scale.
+
+- Positive items: `contribution = numeric - 1`
+- Reverse-coded items: `contribution = 5 - numeric`
+- Summary: `susScore_0_to_100 = sum(contributions) * 2.5`
+
+### Trust/Privacy
+
+Trust/privacy items use a 1-5 scale.
+
+- Normal items: `score = numeric`
+- Reverse-coded privacy concern item: `score = 6 - numeric`
+- Summary: `trustPrivacyAverage_1_to_5`
+
+### Reflection
+
+Reflection items are text responses and are not scored. They are saved in `reflectionAnswers`.
+
+## Data Storage
+
+- **`uploads/`**: Temporary storage for uploaded raw videos.
+- **`results/<sessionId>/survey_answers.json`**: Saved ENGE817 survey payload with raw answers, scored answers, summary scores, reflection answers, and questions.
+- **`question_videos/<sessionId>/`**: Per-question webcam videos and emotion JSON files for stress questions.
+
+Expected stress-item emotion files:
+
+- `question_1_emotions.json`
+- `question_2_emotions.json`
+- `question_3_emotions.json`
+- `question_4_emotions.json`
+- `question_5_emotions.json`
+- `question_6_emotions.json`
+
+It is expected that Q7-Q24 do not produce emotion JSON files.
 
 ## Installation
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/SauravK12/705_backend.git
-cd 705_backend
+git clone https://github.com/yuxinlumiere83157/Multimodal_survey_STEM.git
+cd Multimodal_survey_STEM
 ```
 
-### 2. Back‑end setup
+To work from the ENGE817 update branch:
 
-1. Create a Python virtual environment and install dependencies:
-    
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    pip install --upgrade pip
-    pip install -r requirements.txt
-    
-    ```
-    
-2. Start the Flask server:
-    
-    ```bash
-    python API.py
-    
-    ```
-    
-    By default the server runs in debug mode on `http://localhost:5006`.  You should see a JSON message at the root endpoint confirming that the *Emotion Recognition API* is running.
-    
+```bash
+git checkout codex/enge817-study-instruments
+```
 
-### 3. Front‑end setup
+### 2. Backend setup
 
-The front‑end uses React and Vite.  To start it:
+Create a Python virtual environment and install dependencies:
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Start the Flask server:
+
+```bash
+python API.py
+```
+
+By default, the server runs on:
+
+```text
+http://localhost:5006
+```
+
+### 3. Frontend setup
+
+In a second terminal:
 
 ```bash
 cd client
 npm install
 npm run dev
-
 ```
 
-Vite will serve the application at `http://localhost:5173`.  Ensure the back‑end is running so that API calls succeed.
+Vite serves the application at:
 
-## PyCharm Setup (Windows PowerShell Users)
-
-If you are using PyCharm on Windows and encounter permission issues when running the Flask server (for example, when the terminal blocks script execution), open PowerShell and temporarily allow script execution with:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```text
+http://localhost:5173
 ```
----
 
-The response includes a list of detected faces, each with the predicted emotion, confidence scores for all emotions, the bounding box coordinates, and a processed image annotated with bounding boxes and labels.  Emotion labels correspond to the seven categories noted above.
+Keep the Flask backend running while using the frontend.
 
-### Analysing a video
+## Manual Test Checklist
 
-Upload a video file via a multipart/form‑data POST request to `/api/analyze-video` with the `video` field.  Accepted formats include `.mp4`, `.avi`, `.mov` and `.webm`.  The server processes each frame, annotates detected faces with emotions, saves a processed video to the `results/` folder, and returns statistics such as the number of frames processed, how many frames contained faces, a histogram of detected emotions and a download link to the processed file.
+Expected questionnaire flow:
 
-### Saving questionnaire videos and responses
+- Q1-Q6: stress Likert items with webcam/emotion recording active.
+- Q7-Q16: SUS Likert items with no webcam/emotion recording.
+- Q17-Q21: trust/privacy Likert items with no webcam/emotion recording.
+- Q22-Q24: text reflection prompts with no webcam/emotion recording.
 
-When used with the questionnaire interface, each call to `/api/save-question-video` uploads a WebM recording for a specific question along with its dominant emotion and the full emotion timeline.  Videos are stored in `question_videos/{sessionId}/` and named `question_{questionId}_{emotion}.webm`.  An accompanying JSON file `question_{questionId}_emotions.json` stores the dominant emotion, emotion timeline and file size.  The `/api/save-survey-answers` endpoint stores Likert‑scale responses, mapping textual answers (“Always”, “Often”, etc.) to numerical scores.
+Expected saved survey fields:
 
-## Emotion Categories
+- `instrument: "ENGE817_stress_SUS_trust_privacy_reflection"`
+- `rawAnswers`
+- `scoredAnswers`
+- `summaryScores.stressAverage_0_to_4`
+- `summaryScores.susScore_0_to_100`
+- `summaryScores.trustPrivacyAverage_1_to_5`
+- `reflectionAnswers`
+- `questions`
 
-The underlying model recognises the following emotions.  These classes are widely used in facial expression research and originate from the FER/FER+ datasets:
+## Model and Emotion Categories
 
-| Label | Description |
-| --- | --- |
-| **Neutral** | No strong emotional expression; serves as a baseline. |
-| **Happiness** | Indicates joy or satisfaction. |
-| **Sadness** | Reflects sorrow or disappointment. |
-| **Surprise** | Expression of amazement or astonishment. |
-| **Fear** | Displays apprehension or distress. |
-| **Disgust** | Reaction to unpleasant stimuli. |
-| **Anger** | Shows irritation or hostility. |
+The facial-emotion model is preserved from the previous version. It uses MediaPipe face detection and a TorchScript model file:
 
-## Data Storage
+```text
+torchscript_model_0_66_49_wo_gl.pth
+```
 
-- **`uploads/`** – Temporary storage for uploaded raw videos.
-- **`results/`** – Contains processed videos and survey answer files. When analysing a video with `/api/analyze-video`, the processed video will be saved here. Survey answers are stored as JSON files inside session‑specific folders.
-- **`question_videos/`** – Stores question‑specific videos and emotion metadata. The front‑end writes to this folder when saving per‑question recordings.
+The model recognizes:
 
-## Customisation & Extensions
+- Neutral
+- Happiness
+- Sadness
+- Surprise
+- Fear
+- Disgust
+- Anger
 
-- **Model replacement** – The current model `torchscript_model_0_66_49_wo_gl.pth` can be replaced with any TorchScript model that accepts 224×224 RGB images and outputs probabilities over the seven emotion classes. To train or convert your own PyTorch model to TorchScript, see the PyTorch documentation.
-- **Multiple faces** – The frame analysis endpoint supports detection of up to five faces; the video analysis endpoint processes a single face to reduce computational load.
-- **Deployment considerations** – The API is configured for development use. For production deployment behind a reverse proxy, disable debug mode, restrict allowed file sizes and implement authentication as needed.
+For ENGE817 analysis, facial emotion is grouped as:
+
+- Positive: Happiness, Surprise
+- Neutral: Neutral
+- Negative: Sadness, Fear, Disgust, Anger
+
+## Notes
+
+- This prototype is intended for local research/demo use.
+- The Flask app runs in debug mode by default.
+- For production deployment, disable debug mode, restrict upload handling, and add appropriate authentication and data protection controls.
 
 ## License
 
-This project is released under the MIT License.  See the LICENSE file for more details.
+This project is released under the MIT License. See `LICENSE` for details.
