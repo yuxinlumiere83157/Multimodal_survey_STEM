@@ -15,6 +15,10 @@ const router = createBrowserRouter([
         element: <HomePage />
       },
       {
+        path: "index.html",
+        element: <HomePage />
+      },
+      {
         path: "summary",
         element: <SummaryPage />,
       },
