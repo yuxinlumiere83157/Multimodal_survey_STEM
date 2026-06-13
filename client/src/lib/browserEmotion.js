@@ -9,28 +9,39 @@ const MEDIAPIPE_WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision
 const FACE_LANDMARKER_URL =
   'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task';
 
+export const BROWSER_EMOTION_ASSETS = {
+  onnxModel: MODEL_URL,
+  mediapipeWasm: MEDIAPIPE_WASM_URL,
+  faceLandmarker: FACE_LANDMARKER_URL,
+};
+
 let modelLoadPromise = null;
 
 export async function loadBrowserEmotionModels() {
   if (!modelLoadPromise) {
     modelLoadPromise = (async () => {
-      ort.env.wasm.numThreads = 1;
-      const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
-      const [faceLandmarker, session] = await Promise.all([
-        FaceLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: FACE_LANDMARKER_URL,
-            delegate: 'CPU',
-          },
-          runningMode: 'IMAGE',
-          numFaces: 1,
-        }),
-        ort.InferenceSession.create(MODEL_URL, {
-          executionProviders: ['wasm'],
-        }),
-      ]);
+      try {
+        ort.env.wasm.numThreads = 1;
+        const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
+        const [faceLandmarker, session] = await Promise.all([
+          FaceLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath: FACE_LANDMARKER_URL,
+              delegate: 'CPU',
+            },
+            runningMode: 'IMAGE',
+            numFaces: 1,
+          }),
+          ort.InferenceSession.create(MODEL_URL, {
+            executionProviders: ['wasm'],
+          }),
+        ]);
 
-      return { faceLandmarker, session };
+        return { faceLandmarker, session };
+      } catch (error) {
+        modelLoadPromise = null;
+        throw error;
+      }
     })();
   }
 

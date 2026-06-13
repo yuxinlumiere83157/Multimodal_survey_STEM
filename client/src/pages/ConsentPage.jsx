@@ -20,7 +20,7 @@ function ConsentPage() {
   const handleStartSurvey = () => {
     const isFormValid = consents.termsAccepted && consents.dataConsent;
     if (isFormValid) {
-      navigate('/facecam-preview');
+      navigate('/system-check');
     }
   };
 
@@ -87,7 +87,7 @@ function ConsentPage() {
             disabled={!(consents.termsAccepted && consents.dataConsent)}
             className={`start-survey-btn ${(consents.termsAccepted && consents.dataConsent) ? 'enabled' : 'disabled'}`}
           >
-            Start Survey
+            Run System Check
           </button>
         </div>
       </div>

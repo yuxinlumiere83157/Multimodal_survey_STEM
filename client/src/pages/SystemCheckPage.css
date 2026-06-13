@@ -1,0 +1,225 @@
+body:has(.system-check-page) {
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  place-items: unset !important;
+  background: #f7f8fc !important;
+}
+
+#root:has(.system-check-page) {
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: left !important;
+}
+
+.system-check-page {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 46%, #f7f4ff 100%);
+  color: #243047;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  z-index: 1000;
+  box-sizing: border-box;
+  padding: 48px 20px;
+}
+
+.system-check-container {
+  width: min(920px, 100%);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.system-check-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.system-check-eyebrow {
+  color: #4f46e5;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.system-check-header h1 {
+  color: #172033;
+  font-size: clamp(32px, 4vw, 48px);
+  line-height: 1.05;
+  margin: 0;
+}
+
+.system-check-header p {
+  color: #596277;
+  font-size: 17px;
+  line-height: 1.7;
+  margin: 0;
+  max-width: 720px;
+}
+
+.system-check-card,
+.system-check-details {
+  background: #ffffff;
+  border: 1px solid rgba(79, 70, 229, 0.12);
+  border-radius: 18px;
+  box-shadow: 0 18px 45px -32px rgba(40, 48, 77, 0.45);
+  padding: 26px;
+}
+
+.check-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 16px;
+  padding: 18px 0;
+  border-bottom: 1px solid #edf0f7;
+}
+
+.check-row:first-child {
+  padding-top: 0;
+}
+
+.check-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.check-status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #c6ccda;
+  margin-top: 7px;
+}
+
+.check-row-checking .check-status-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.14);
+}
+
+.check-row-ready .check-status-dot {
+  background: #10b981;
+  box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.14);
+}
+
+.check-row-error .check-status-dot {
+  background: #ef4444;
+  box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.14);
+}
+
+.check-row h2,
+.system-check-details h2 {
+  color: #172033;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+
+.check-row p,
+.system-check-details p {
+  color: #5d6678;
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.system-check-details dl {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+}
+
+.system-check-details dl div {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.32fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.system-check-details dt {
+  color: #34405a;
+  font-weight: 700;
+}
+
+.system-check-details dd {
+  color: #687187;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.system-check-warning {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+  color: #9a3412;
+  padding: 16px 18px;
+}
+
+.system-check-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.primary-check-button,
+.secondary-check-button {
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 14px 24px;
+  transition: transform 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
+}
+
+.primary-check-button {
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+.primary-check-button.enabled:hover,
+.secondary-check-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.primary-check-button.disabled,
+.secondary-check-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.secondary-check-button {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+@media (max-width: 720px) {
+  .system-check-page {
+    padding: 28px 16px;
+  }
+
+  .system-check-card,
+  .system-check-details {
+    padding: 20px;
+  }
+
+  .system-check-details dl div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .system-check-actions {
+    flex-direction: column;
+  }
+
+  .primary-check-button,
+  .secondary-check-button {
+    width: 100%;
+  }
+}

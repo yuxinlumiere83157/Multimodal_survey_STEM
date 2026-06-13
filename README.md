@@ -111,6 +111,28 @@ Expected stress-item emotion files:
 
 It is expected that Q7-Q24 do not produce emotion JSON files.
 
+On the hosted Hugging Face Static Space deployment, there is no writable backend server. In that mode, final survey submissions are downloaded by the participant's browser as a JSON file named like:
+
+```text
+submit_session_<timestamp>_survey_results.json
+```
+
+Hugging Face does not receive or store survey answers in the static deployment. When the Flask API is running locally at `http://localhost:5006`, the frontend detects it and saves results through the backend paths listed above.
+
+## Browser System Check
+
+After consent, the participant is routed to `/system-check` before camera setup. This page loads and initializes the browser emotion stack before the questionnaire begins:
+
+- `/models/fer_model.onnx`
+- MediaPipe FaceLandmarker model
+- MediaPipe WebAssembly runtime files
+- ONNX Runtime Web files
+
+The page also reports the active results destination:
+
+- **Static demo mode:** final results download as a browser JSON file.
+- **Local Flask mode:** final answers save under `results/<sessionId>/`, and derived emotion timelines save under `question_videos/<sessionId>/`.
+
 ## Installation
 
 ### 1. Clone the repository

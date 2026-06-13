@@ -36,6 +36,7 @@ function ReviewPage() {
   const emotionSession = useMemo(() => location.state?.emotionSession || {}, [location.state]);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(true);
+  const backendSessionId = location.state?.sessionId || answers.sessionId || null;
 
   // If no data is provided, use test data for demo purposes
   useEffect(() => {
@@ -143,7 +144,13 @@ function ReviewPage() {
         const result = await response.json();
         console.log('Survey answers saved:', result);
         alert(`Survey submitted successfully! \n\nJSON file saved to: ${result.answersPath || 'results folder'}\nSession ID: ${result.sessionId}`);
-        navigate('/completion');
+        navigate('/completion', {
+          state: {
+            storageMode: 'server',
+            sessionId: result.sessionId,
+            answersPath: result.answersPath,
+          }
+        });
       } else {
         const errorText = await response.text();
         console.error('Submit error:', errorText);
@@ -156,11 +163,19 @@ function ReviewPage() {
       });
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
+      const downloadFilename = `${sessionId}_survey_results.json`;
       link.href = downloadUrl;
-      link.download = `${sessionId}_survey_results.json`;
+      link.download = downloadFilename;
       link.click();
       URL.revokeObjectURL(downloadUrl);
-      navigate('/completion', { state: { localOnly: true } });
+      navigate('/completion', {
+        state: {
+          localOnly: true,
+          storageMode: 'download',
+          sessionId,
+          downloadFilename
+        }
+      });
     }
   };
 
@@ -279,6 +294,24 @@ function ReviewPage() {
             )}
           </div>
         )}
+
+        <div className="results-destination-card">
+          <h2>Where These Results Go</h2>
+          {backendSessionId ? (
+            <p>
+              A local Flask API session is active. Final answers will be saved to
+              <strong> results/{backendSessionId}/survey_answers.json</strong>, and derived emotion samples
+              are saved under <strong>question_videos/{backendSessionId}/</strong>. No raw webcam video is
+              stored by this browser-only survey flow.
+            </p>
+          ) : (
+            <p>
+              This hosted static demo is running without a backend. When you submit, the app downloads a JSON
+              results file to your browser&apos;s downloads folder. Hugging Face does not receive or store the
+              survey answers from this static demo.
+            </p>
+          )}
+        </div>
 
       </div>
       

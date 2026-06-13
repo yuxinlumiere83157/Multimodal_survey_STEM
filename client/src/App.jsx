@@ -1,7 +1,7 @@
 import React from 'react'
 import './App.css'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
-import { HomePage, SummaryPage, QuestionnairePage, ReviewPage, ConsentPage, FacecamPreviewPage, CompletionPage, ErrorPage, Root, BrowserEmotionPage } from './pages'
+import { HomePage, SummaryPage, QuestionnairePage, ReviewPage, ConsentPage, FacecamPreviewPage, CompletionPage, ErrorPage, Root, BrowserEmotionPage, SystemCheckPage } from './pages'
 
 
 const router = createBrowserRouter([
@@ -29,6 +29,10 @@ const router = createBrowserRouter([
       {
         path: "consent",
         element: <ConsentPage />,
+      },
+      {
+        path: "system-check",
+        element: <SystemCheckPage />,
       },
       {
         path: "facecam-preview",
