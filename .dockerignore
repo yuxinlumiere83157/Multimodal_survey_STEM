@@ -1,0 +1,13 @@
+﻿.git
+.idea
+__pycache__
+*.pyc
+client/node_modules
+client/dist
+uploads
+results
+question_videos
+*.mp4
+*.avi
+*.mov
+*.webm
