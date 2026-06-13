@@ -210,6 +210,30 @@ For ENGE817 analysis, facial emotion is grouped as:
 - Neutral: Neutral
 - Negative: Sadness, Fear, Disgust, Anger
 
+## Browser-Only Privacy Prototype
+
+The `codex/browser-onnx-research` branch includes an experimental browser-only route:
+
+```text
+/browser-emotion-demo
+```
+
+This page loads an ONNX conversion of the emotion model from:
+
+```text
+client/public/models/fer_model.onnx
+```
+
+It runs face detection and emotion inference in the participant's browser. Webcam frames are not sent to the Flask API. This is intended as the lowest-cost and strongest-privacy deployment direction: a static site can host the UI/model, while only consented survey answers and derived emotion labels need to be saved to durable storage.
+
+The conversion is reproducible with:
+
+```bash
+python tools/export_onnx.py
+```
+
+The exporter validates ONNX Runtime outputs against the TorchScript model and should show very small differences (around `1e-6`) before the browser model is trusted.
+
 ## Notes
 
 - This prototype is intended for local research/demo use.

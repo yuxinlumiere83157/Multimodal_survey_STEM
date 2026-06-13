@@ -131,6 +131,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.venv-onnx/
+.npm-cache/
 
 # Spyder project settings
 .spyderproject

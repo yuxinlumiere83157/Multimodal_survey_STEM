@@ -28,6 +28,10 @@ function HomePage() {
               Take the survey &gt;&gt;
             </button>
           </Link>
+
+          <Link to="/browser-emotion-demo" className="privacy-demo-link">
+            Try browser-only emotion analysis
+          </Link>
         </main>
       </div>
     </div>

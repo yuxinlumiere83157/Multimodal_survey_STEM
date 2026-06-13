@@ -1,7 +1,7 @@
 import React from 'react'
 import './App.css'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
-import { HomePage, SummaryPage, QuestionnairePage, ReviewPage, ConsentPage, FacecamPreviewPage, CompletionPage, ErrorPage, Root } from './pages'
+import { HomePage, SummaryPage, QuestionnairePage, ReviewPage, ConsentPage, FacecamPreviewPage, CompletionPage, ErrorPage, Root, BrowserEmotionPage } from './pages'
 
 
 const router = createBrowserRouter([
@@ -37,6 +37,10 @@ const router = createBrowserRouter([
       {
         path: "completion",
         element: <CompletionPage />,
+      },
+      {
+        path: "browser-emotion-demo",
+        element: <BrowserEmotionPage />,
       },
     ]
   },

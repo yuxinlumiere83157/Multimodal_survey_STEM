@@ -175,6 +175,18 @@
   outline-offset: 2px;
 }
 
+.privacy-demo-link {
+  color: #0f766e;
+  display: block;
+  font-weight: 600;
+  margin-top: 1rem;
+  text-decoration: none;
+}
+
+.privacy-demo-link:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 768px) {
   .homepage {
     padding: 1rem;
