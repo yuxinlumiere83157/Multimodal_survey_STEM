@@ -6,7 +6,7 @@ colorTo: purple
 sdk: docker
 app_port: 7860
 pinned: false
-short_description: Webcam facial-emotion-recognition technology demo (no data stored).
+short_description: Webcam emotion demo (no data stored).
 ---
 
 # Multimodal Survey STEM Emotion Demo
