@@ -210,6 +210,63 @@ For ENGE817 analysis, facial emotion is grouped as:
 - Neutral: Neutral
 - Negative: Sadness, Fear, Disgust, Anger
 
+## Deployment Note: Git LFS Model File
+
+This project depends on the model file:
+
+```text
+torchscript_model_0_66_49_wo_gl.pth
+```
+
+The model file is stored with Git LFS because it is too large to be handled as a normal Git file. If Git LFS is not installed or the LFS files are not pulled correctly, Docker will fail during the build step with an error like:
+
+```text
+COPY torchscript_model_0_66_49_wo_gl.pth ./: not found
+```
+
+This happens because the Dockerfile expects the model file to exist in the project root directory before building the image.
+
+### Fix
+
+Before building the Docker image, make sure Git LFS is installed and the model file has been downloaded:
+
+```bash
+git lfs install
+git lfs pull
+git lfs checkout
+ls -lh torchscript_model_0_66_49_wo_gl.pth
+```
+
+The file should be visible in the project root directory and should be around 94 MB.
+
+After confirming the model file exists, build and run the Docker container:
+
+```bash
+docker build -t multimodal-survey-demo:local .
+docker run --rm -p 7860:7860 --name fer-demo multimodal-survey-demo:local
+```
+
+Then open:
+
+```text
+http://localhost:7860/
+```
+
+### Common Mistake
+
+If `docker build` fails, do not run `docker run` immediately afterward. The Docker image will not exist if the build step fails, which may cause an error such as:
+
+```text
+Unable to find image 'multimodal-survey-demo:local' locally
+```
+
+To avoid this, use:
+
+```bash
+docker build -t multimodal-survey-demo:local . && \
+docker run --rm -p 7860:7860 --name fer-demo multimodal-survey-demo:local
+```
+
 ## Notes
 
 - This prototype is intended for local research/demo use.
