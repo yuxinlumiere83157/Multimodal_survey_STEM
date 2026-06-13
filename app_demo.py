@@ -85,11 +85,19 @@ def predict():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/api/predict", methods=["GET", "PUT", "PATCH", "DELETE"])
+def predict_method_not_allowed():
+    return jsonify({"error": "Method not allowed"}), 405
+
+
 _DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "client", "dist")
 
 
 @app.route("/<path:path>", endpoint="_spa_path")
 def _serve_client(path=""):
+    if path.startswith("api/"):
+        return jsonify({"error": "API route not found"}), 404
+
     full = os.path.join(_DIST, path)
     if path and os.path.isfile(full):
         return send_from_directory(_DIST, path)
