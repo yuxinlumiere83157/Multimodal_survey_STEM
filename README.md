@@ -121,22 +121,103 @@ Expected stress-item emotion files:
 
 It is expected that Q7-Q24 do not produce emotion JSON files.
 
-## Installation
+## Run With Docker (Recommended)
 
-### 1. Clone the repository
+Docker is the simplest way to run the full research/demo app because the image builds the Vite/React client and serves the finished static files from Flask on port `7860`.
+
+These commands work from PowerShell, Command Prompt, Terminal, or any normal shell on Windows, macOS, or Linux:
 
 ```bash
 git clone https://github.com/yuxinlumiere83157/Multimodal_survey_STEM.git
 cd Multimodal_survey_STEM
 ```
 
-To work from the ENGE817 update branch:
+Make sure the TorchScript model file is present before building:
 
 ```bash
-git checkout codex/enge817-study-instruments
+git lfs install
+git lfs pull
+git lfs checkout
 ```
 
-### 2. Backend setup
+The project root should contain:
+
+```text
+torchscript_model_0_66_49_wo_gl.pth
+```
+
+Build and run the local Docker image:
+
+```bash
+docker build -t multimodal-survey-demo:local .
+docker run --rm -p 7860:7860 --name fer-demo multimodal-survey-demo:local
+```
+
+Open:
+
+```text
+http://localhost:7860/
+```
+
+### Check Output Files
+
+After completing a questionnaire run, the saved survey output is written to:
+
+```text
+results/<sessionId>/survey_answers.json
+```
+
+Stress-question webcam/emotion outputs are written to:
+
+```text
+question_videos/<sessionId>/
+```
+
+When running with Docker, these paths live inside the container under `/data` by default. To quickly inspect files while the container is still running:
+
+```bash
+docker exec fer-demo find /data -maxdepth 3 -type f
+docker exec fer-demo cat /data/results/<sessionId>/survey_answers.json
+```
+
+Replace `<sessionId>` with the folder name created by your test run.
+
+Because the recommended `docker run --rm` command removes the container when it stops, use a local volume if you want to keep output files on your computer.
+
+Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force docker-data
+docker run --rm -p 7860:7860 --name fer-demo -v "${PWD}/docker-data:/data" multimodal-survey-demo:local
+```
+
+macOS/Linux:
+
+```bash
+mkdir -p docker-data
+docker run --rm -p 7860:7860 --name fer-demo -v "$PWD/docker-data:/data" multimodal-survey-demo:local
+```
+
+Then check:
+
+```text
+docker-data/results/<sessionId>/survey_answers.json
+docker-data/question_videos/<sessionId>/
+```
+
+The Dockerfile uses a multi-stage build:
+
+- A Node stage installs `client/` dependencies and runs the Vite production build.
+- A Python 3.11 slim stage installs CPU-only PyTorch wheels from `https://download.pytorch.org/whl/cpu`.
+- Flask/gunicorn serves both the built React app and the API from `0.0.0.0:7860`.
+
+This is a research/demo project. When you run it locally with Docker, webcam image/video processing is handled by the local Flask container for the existing prediction and research flow; the Docker packaging does not change the app's current consent, storage, privacy, or API behavior.
+
+## Local Development Without Docker
+
+Use this path only if you want separate frontend and backend development servers.
+
+### Backend setup
 
 Create a Python virtual environment and install dependencies:
 
@@ -159,7 +240,7 @@ By default, the server runs on:
 http://localhost:5006
 ```
 
-### 3. Frontend setup
+### Frontend setup
 
 In a second terminal:
 
@@ -176,6 +257,36 @@ http://localhost:5173
 ```
 
 Keep the Flask backend running while using the frontend.
+
+## Docker Troubleshooting
+
+If the model file is missing or only a small Git LFS pointer file, install Git LFS and run:
+
+```bash
+git lfs pull
+git lfs checkout
+```
+
+If `docker run` says the container name is already in use, remove the stopped container or choose a different name:
+
+```bash
+docker rm fer-demo
+docker run --rm -p 7860:7860 --name fer-demo multimodal-survey-demo:local
+```
+
+If port `7860` is already in use, either stop the other service or map a different local port:
+
+```bash
+docker run --rm -p 7861:7860 --name fer-demo multimodal-survey-demo:local
+```
+
+Then open `http://localhost:7861/`.
+
+If `docker build` fails, fix the build error before running the image. The image tag is only created after a successful build:
+
+```bash
+docker build -t multimodal-survey-demo:local . && docker run --rm -p 7860:7860 --name fer-demo multimodal-survey-demo:local
+```
 
 ## Manual Test Checklist
 
@@ -221,7 +332,7 @@ For ENGE817 analysis, facial emotion is grouped as:
 - Neutral: Neutral
 - Negative: Sadness, Fear, Disgust, Anger
 
-## Deployment Note: Git LFS Model File
+## Model File and Git LFS
 
 This project depends on the model file:
 
@@ -229,17 +340,7 @@ This project depends on the model file:
 torchscript_model_0_66_49_wo_gl.pth
 ```
 
-The model file is stored with Git LFS because it is too large to be handled as a normal Git file. If Git LFS is not installed or the LFS files are not pulled correctly, Docker will fail during the build step with an error like:
-
-```text
-COPY torchscript_model_0_66_49_wo_gl.pth ./: not found
-```
-
-This happens because the Dockerfile expects the model file to exist in the project root directory before building the image.
-
-### Fix
-
-Before building the Docker image, make sure Git LFS is installed and the model file has been downloaded:
+The model file is stored with Git LFS because it is too large to be handled as a normal Git file. Before building the Docker image, make sure Git LFS is installed and the real model file has been downloaded:
 
 ```bash
 git lfs install
@@ -248,39 +349,11 @@ git lfs checkout
 ls -lh torchscript_model_0_66_49_wo_gl.pth
 ```
 
-The file should be visible in the project root directory and should be around 94 MB.
-
-After confirming the model file exists, build and run the Docker container:
-
-```bash
-docker build -t multimodal-survey-demo:local .
-docker run --rm -p 7860:7860 --name fer-demo multimodal-survey-demo:local
-```
-
-Then open:
-
-```text
-http://localhost:7860/
-```
-
-### Common Mistake
-
-If `docker build` fails, do not run `docker run` immediately afterward. The Docker image will not exist if the build step fails, which may cause an error such as:
-
-```text
-Unable to find image 'multimodal-survey-demo:local' locally
-```
-
-To avoid this, use:
-
-```bash
-docker build -t multimodal-survey-demo:local . && \
-docker run --rm -p 7860:7860 --name fer-demo multimodal-survey-demo:local
-```
+The file should be visible in the project root directory and should be around 94 MB. The Dockerfile also checks the file size during the build so a missing LFS download fails early.
 
 ## Hugging Face Research Deployment Notes
 
-This branch keeps the full ENGE817 research workflow, including survey saving and stress-question webcam video saving. It is therefore different from a public technology demo.
+This Docker setup keeps the full ENGE817 research workflow, including survey saving and stress-question webcam video saving. It is therefore different from a public technology demo.
 
 For Docker Spaces, the container serves both the built React client and the Flask API on port `7860`:
 
@@ -318,7 +391,7 @@ Before collecting real participant data, also confirm consent wording, ethics ap
 ## Notes
 
 - This prototype is intended for local research/demo use.
-- The Flask app runs in debug mode by default.
+- The Flask app runs in debug mode when started locally with `python API.py`.
 - For production deployment, disable debug mode, restrict upload handling, and add appropriate authentication and data protection controls.
 
 ## License

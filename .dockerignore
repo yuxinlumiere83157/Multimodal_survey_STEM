@@ -2,15 +2,25 @@
 .idea
 __pycache__
 *.pyc
+.pyo
 .pytest_cache
 .mypy_cache
+.npm-cache
+.venv
+venv
+*.log
+.env
+.DS_Store
 
 client/node_modules
 client/dist
+client/.vite
+client/.eslintcache
 
-uploads
-results
-question_videos
+uploads/
+results/
+question_videos/
+docker-data/
 
 *.mp4
 *.webm

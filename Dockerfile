@@ -2,7 +2,7 @@ FROM node:22-slim AS client-build
 
 WORKDIR /client
 COPY client/package*.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 COPY client/ ./
 RUN npm run build
 
@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Install CPU-only PyTorch wheels so the Docker image does not pull CUDA builds.
 RUN pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
 
 COPY requirements-cpu.txt .
