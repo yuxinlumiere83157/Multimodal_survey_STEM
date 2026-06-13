@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { STUDY_QUESTIONS } from '../studyQuestions';
+import { apiUrl } from '../api';
 import './ReviewPage.css';
 
 function ReviewPage() {
@@ -66,7 +67,7 @@ function ReviewPage() {
 
       try {
         console.log('Fetching analysis results for sessionId:', sessionId);
-        const response = await fetch('http://localhost:5006/api/analyze-survey-results', {
+        const response = await fetch(apiUrl('/api/analyze-survey-results'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -111,7 +112,7 @@ function ReviewPage() {
     console.log('Submitting survey with sessionId:', sessionId);
     
     try {
-      const response = await fetch('http://localhost:5006/api/save-survey-answers', {
+      const response = await fetch(apiUrl('/api/save-survey-answers'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

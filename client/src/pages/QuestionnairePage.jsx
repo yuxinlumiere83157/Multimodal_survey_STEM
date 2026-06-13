@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { STUDY_QUESTIONS } from '../studyQuestions';
+import { apiUrl } from '../api';
 import './QuestionnairePage.css';
 
 function QuestionnairePage() {
@@ -72,7 +73,7 @@ function QuestionnairePage() {
     const imageData = canvas.toDataURL('image/jpeg');
 
     try {
-      const response = await fetch('http://localhost:5006/api/analyze-frame', {
+      const response = await fetch(apiUrl('/api/analyze-frame'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -295,7 +296,7 @@ function QuestionnairePage() {
     }
 
     try {
-      const response = await fetch('http://localhost:5006/api/save-question-video', {
+      const response = await fetch(apiUrl('/api/save-question-video'), {
         method: 'POST',
         body: formData,
         // Add timeout to prevent hanging

@@ -1,3 +1,14 @@
+---
+title: ENGE817 Multimodal Survey Research App
+emoji: 🧪
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: Research survey app with webcam emotion analysis.
+---
+
 # ENGE817 Multimodal Stress, Usability, and Trust Pilot Study
 
 ## Overview
@@ -266,6 +277,43 @@ To avoid this, use:
 docker build -t multimodal-survey-demo:local . && \
 docker run --rm -p 7860:7860 --name fer-demo multimodal-survey-demo:local
 ```
+
+## Hugging Face Research Deployment Notes
+
+This branch keeps the full ENGE817 research workflow, including survey saving and stress-question webcam video saving. It is therefore different from a public technology demo.
+
+For Docker Spaces, the container serves both the built React client and the Flask API on port `7860`:
+
+```bash
+docker build -t multimodal-survey-research:local .
+docker run --rm -p 7860:7860 --name fer-research-demo multimodal-survey-research:local
+```
+
+Then open:
+
+```text
+http://localhost:7860/
+```
+
+The hosted Docker entrypoint uses:
+
+```text
+gunicorn --bind 0.0.0.0:7860 --workers 1 --timeout 180 app_research_space:app
+```
+
+### Data Storage Warning
+
+The Flask app writes research outputs to:
+
+- `uploads/`
+- `results/`
+- `question_videos/`
+
+In local development these folders are created under the project root. In the Docker Space wrapper, they are created under `APP_DATA_DIR`, which defaults to `/data`.
+
+Do not rely on the default free Hugging Face Space filesystem for participant data collection. The default Space disk is ephemeral and may be lost when the Space restarts. For real data collection, attach persistent storage such as a Hugging Face Storage Bucket mounted at `/data`, or set `APP_DATA_DIR` to another durable mounted path before starting the app.
+
+Before collecting real participant data, also confirm consent wording, ethics approval, access controls, retention rules, and whether the Space should be private or protected rather than public.
 
 ## Notes
 

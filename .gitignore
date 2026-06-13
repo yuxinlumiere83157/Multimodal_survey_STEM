@@ -258,3 +258,7 @@ result.mp4
 result.gif
 results/
 question_videos/
+uploads/
+client/node_modules/
+client/dist/
+.npm-cache/
