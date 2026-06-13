@@ -135,6 +135,8 @@ env.bak/
 venv.bak/
 .venv-onnx/
 .npm-cache/
+.wrangler-config/
+collector/node_modules/
 
 # Spyder project settings
 .spyderproject

@@ -99,6 +99,7 @@ Reflection items are text responses and are not scored. They are saved in `refle
 - **`uploads/`**: Temporary storage for legacy uploaded raw videos.
 - **`results/<sessionId>/survey_answers.json`**: Saved ENGE817 survey payload with raw answers, scored answers, summary scores, reflection answers, and questions.
 - **`question_videos/<sessionId>/`**: Per-question derived emotion JSON files for stress questions. In the browser-only prototype, raw webcam video is not uploaded or stored.
+- **Cloudflare D1 collector (`collector/`)**: Optional free central collection path for hosted static deployments.
 
 Expected stress-item emotion files:
 
@@ -117,7 +118,7 @@ On the hosted Hugging Face Static Space deployment, there is no writable backend
 submit_session_<timestamp>_survey_results.json
 ```
 
-Hugging Face does not receive or store survey answers in the static deployment. When the Flask API is running locally at `http://localhost:5006`, the frontend detects it and saves results through the backend paths listed above.
+Hugging Face does not receive or store survey answers in the static deployment. When the Flask API is running locally at `http://localhost:5006`, the frontend detects it and saves results through the backend paths listed above. When `client/public/collector-config.json` enables a Cloudflare Worker collector, submissions are sent to that HTTPS endpoint first and stored centrally in D1.
 
 ## Browser System Check
 
@@ -130,8 +131,38 @@ After consent, the participant is routed to `/system-check` before camera setup.
 
 The page also reports the active results destination:
 
+- **Cloudflare collector mode:** final results are stored in D1 through the Worker API and can later be exported as JSON or CSV.
 - **Static demo mode:** final results download as a browser JSON file.
 - **Local Flask mode:** final answers save under `results/<sessionId>/`, and derived emotion timelines save under `question_videos/<sessionId>/`.
+
+## Cloudflare Worker + D1 Collector
+
+The `collector/` folder contains a reusable Cloudflare Worker and D1 schema for central survey result collection. It provides:
+
+- `GET /api/health`
+- `POST /api/submit-survey`
+- `GET /api/export.json`
+- `GET /api/export.csv`
+
+The collector stores final answer JSON, derived emotion timeline JSON, analysis JSON, and scalar summary fields. It does not store raw webcam frames, raw video, IP addresses, or user-agent strings.
+
+To connect a deployed Worker to the static frontend, update:
+
+```text
+client/public/collector-config.json
+```
+
+Example:
+
+```json
+{
+  "enabled": true,
+  "projectId": "multimodal-survey-stem",
+  "collectorUrl": "https://multimodal-survey-collector.<your-subdomain>.workers.dev"
+}
+```
+
+See `collector/README.md` for D1 creation, Wrangler deployment, and export commands.
 
 ## Installation
 

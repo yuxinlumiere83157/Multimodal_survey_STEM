@@ -1,7 +1,8 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { STUDY_QUESTIONS } from '../studyQuestions';
-import { analyzeStudyResults } from '../lib/studyAnalysis';
+import { loadCollectorConfig, submitToCollector } from '../lib/collectorConfig';
+import { analyzeStudyResults, scoreStudyAnswers } from '../lib/studyAnalysis';
 import './ReviewPage.css';
 
 function ReviewPage() {
@@ -36,7 +37,12 @@ function ReviewPage() {
   const emotionSession = useMemo(() => location.state?.emotionSession || {}, [location.state]);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(true);
+  const [collectorConfig, setCollectorConfig] = useState(null);
   const backendSessionId = location.state?.sessionId || answers.sessionId || null;
+
+  useEffect(() => {
+    loadCollectorConfig().then(setCollectorConfig);
+  }, []);
 
   // If no data is provided, use test data for demo purposes
   useEffect(() => {
@@ -121,14 +127,34 @@ function ReviewPage() {
 
     console.log('Submitting survey with sessionId:', sessionId);
 
+    const scoredStudy = scoreStudyAnswers(answers, questions);
     const submissionPayload = {
       sessionId: sessionId,
       answers: answers,
       questions: questions,
       emotionSession: emotionSession,
       analysis: analysisResult,
+      scoredStudy,
       savedAt: new Date().toISOString()
     };
+
+    if (collectorConfig?.enabled) {
+      try {
+        const result = await submitToCollector(collectorConfig, submissionPayload);
+        console.log('Survey answers saved to Cloudflare collector:', result);
+        navigate('/completion', {
+          state: {
+            storageMode: 'cloudflare',
+            sessionId: result.sessionId,
+            projectId: result.projectId,
+            collectorUrl: collectorConfig.collectorUrl,
+          }
+        });
+        return;
+      } catch (collectorError) {
+        console.error('Cloudflare collector submit failed; falling back to local save/download:', collectorError);
+      }
+    }
     
     try {
       const response = await fetch('http://localhost:5006/api/save-survey-answers', {
@@ -297,7 +323,13 @@ function ReviewPage() {
 
         <div className="results-destination-card">
           <h2>Where These Results Go</h2>
-          {backendSessionId ? (
+          {collectorConfig?.enabled ? (
+            <p>
+              A Cloudflare Worker collector is configured. When you submit, final answers, derived emotion
+              samples, and analysis summaries will be saved centrally in D1 for later JSON or CSV export. No
+              raw webcam video is uploaded.
+            </p>
+          ) : backendSessionId ? (
             <p>
               A local Flask API session is active. Final answers will be saved to
               <strong> results/{backendSessionId}/survey_answers.json</strong>, and derived emotion samples

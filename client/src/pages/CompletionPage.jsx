@@ -8,6 +8,7 @@ function CompletionPage() {
   const sessionId = location.state?.sessionId;
   const answersPath = location.state?.answersPath;
   const downloadFilename = location.state?.downloadFilename;
+  const projectId = location.state?.projectId;
 
   return (
     <div className="completion-page">
@@ -22,9 +23,11 @@ function CompletionPage() {
 
         {storageMode && (
           <p className="completion-message">
-            {storageMode === 'server'
-              ? `Saved through the local Flask API${answersPath ? ` at ${answersPath}` : ''}${sessionId ? ` for session ${sessionId}` : ''}.`
-              : `Downloaded as ${downloadFilename || 'a survey results JSON file'}${sessionId ? ` for session ${sessionId}` : ''}.`}
+            {storageMode === 'cloudflare'
+              ? `Saved to the Cloudflare D1 collector${projectId ? ` for project ${projectId}` : ''}${sessionId ? ` with session ${sessionId}` : ''}.`
+              : storageMode === 'server'
+                ? `Saved through the local Flask API${answersPath ? ` at ${answersPath}` : ''}${sessionId ? ` for session ${sessionId}` : ''}.`
+                : `Downloaded as ${downloadFilename || 'a survey results JSON file'}${sessionId ? ` for session ${sessionId}` : ''}.`}
           </p>
         )}
 

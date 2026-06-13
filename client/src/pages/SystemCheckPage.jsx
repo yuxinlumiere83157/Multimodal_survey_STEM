@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { checkCollectorHealth, loadCollectorConfig } from '../lib/collectorConfig';
 import { BROWSER_EMOTION_ASSETS, loadBrowserEmotionModels } from '../lib/browserEmotion';
 import './SystemCheckPage.css';
 
@@ -24,7 +25,7 @@ function getInitialChecks() {
     [CHECKS.storage]: {
       label: 'Results destination',
       status: 'pending',
-      detail: 'Waiting to check whether a local Flask results API is available.',
+      detail: 'Waiting to check whether a Cloudflare collector or local Flask results API is available.',
     },
   };
 }
@@ -45,7 +46,10 @@ function SystemCheckPage() {
     }));
   };
 
-  const canContinue = checks.browser.status === 'ready' && checks.models.status === 'ready';
+  const canContinue =
+    checks.browser.status === 'ready' &&
+    checks.models.status === 'ready' &&
+    checks.storage.status !== 'error';
   const hasFailure = Object.values(checks).some((check) => check.status === 'error');
 
   const runChecks = async () => {
@@ -95,8 +99,31 @@ function SystemCheckPage() {
 
     updateCheck(CHECKS.storage, {
       status: 'checking',
-      detail: 'Checking whether localhost:5006 is available for local result storage.',
+      detail: 'Checking whether a configured Cloudflare collector or localhost:5006 is available.',
     });
+
+    const collectorConfig = await loadCollectorConfig();
+    if (collectorConfig.enabled) {
+      const collectorHealth = await checkCollectorHealth(collectorConfig);
+      if (collectorHealth.ok) {
+        setStorageMode('cloudflare');
+        updateCheck(CHECKS.storage, {
+          status: 'ready',
+          detail: `Cloudflare Worker collector detected. Submissions will be stored in D1 for project "${collectorConfig.projectId}".`,
+        });
+        setIsChecking(false);
+        return;
+      }
+
+      setStorageMode('collector-error');
+      updateCheck(CHECKS.storage, {
+        status: 'error',
+        detail:
+          'A Cloudflare collector is configured, but it is not reachable. Retry before continuing so central result collection does not fail.',
+      });
+      setIsChecking(false);
+      return;
+    }
 
     try {
       const response = await fetch('http://localhost:5006/api/health', {
@@ -182,9 +209,11 @@ function SystemCheckPage() {
         <section className="system-check-details">
           <h2>Where the test results go</h2>
           <p>
-            {storageMode === 'server'
-              ? 'Because the local Flask API is available, the final answer JSON will be written to the project results folder and emotion timelines will be written to the question_videos folder.'
-              : 'On this hosted static demo, Hugging Face does not receive or store survey submissions. When you submit, the app downloads a JSON results file through your browser.'}
+            {storageMode === 'cloudflare'
+              ? 'The configured Cloudflare Worker collector is available. Final results will be stored centrally in D1 for later JSON or CSV export.'
+              : storageMode === 'server'
+                ? 'Because the local Flask API is available, the final answer JSON will be written to the project results folder and emotion timelines will be written to the question_videos folder.'
+                : 'On this hosted static demo, Hugging Face does not receive or store survey submissions. When you submit, the app downloads a JSON results file through your browser.'}
           </p>
         </section>
 

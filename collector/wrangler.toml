@@ -1,0 +1,11 @@
+name = "multimodal-survey-collector"
+main = "src/index.js"
+compatibility_date = "2026-06-14"
+
+[vars]
+ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,https://impale5666-multimodal-survey-demo.static.hf.space"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "multimodal-survey-results"
+database_id = "replace-with-cloudflare-d1-database-id"
