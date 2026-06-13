@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { STUDY_QUESTIONS } from '../studyQuestions';
+import { analyzeStudyResults } from '../lib/studyAnalysis';
 import './ReviewPage.css';
 
 function ReviewPage() {
@@ -32,6 +33,7 @@ function ReviewPage() {
     }
     return STUDY_QUESTIONS;
   }, [location.state]);
+  const emotionSession = useMemo(() => location.state?.emotionSession || {}, [location.state]);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(true);
 
@@ -58,10 +60,15 @@ function ReviewPage() {
       console.log('ReviewPage: answers =', answers);
       console.log('ReviewPage: location.state =', location.state);
 
+      const localAnalysis = analyzeStudyResults({ answers, questions, emotionSession });
+
       // If no sessionId, create a temporary one for this session
       if (!sessionId) {
         sessionId = `review_session_${Date.now()}`;
         console.warn('No sessionId found, creating temporary one:', sessionId);
+        setAnalysisResult(localAnalysis);
+        setLoadingAnalysis(false);
+        return;
       }
 
       try {
@@ -75,7 +82,8 @@ function ReviewPage() {
             sessionId: sessionId,
             answers: answers,
             questions: questions
-          })
+          }),
+          signal: AbortSignal.timeout(5000)
         });
 
         if (response.ok) {
@@ -86,16 +94,18 @@ function ReviewPage() {
           console.error('Failed to fetch analysis results, status:', response.status);
           const errorText = await response.text();
           console.error('Error response:', errorText);
+          setAnalysisResult(localAnalysis);
         }
       } catch (error) {
         console.error('Error fetching analysis:', error);
+        setAnalysisResult(localAnalysis);
       } finally {
         setLoadingAnalysis(false);
       }
     };
 
     fetchAnalysis();
-  }, [answers, location.state, questions]);
+  }, [answers, emotionSession, location.state, questions]);
 
   const handleSubmit = async () => {
     // Get sessionId from state or create a new one
@@ -109,6 +119,15 @@ function ReviewPage() {
     }
 
     console.log('Submitting survey with sessionId:', sessionId);
+
+    const submissionPayload = {
+      sessionId: sessionId,
+      answers: answers,
+      questions: questions,
+      emotionSession: emotionSession,
+      analysis: analysisResult,
+      savedAt: new Date().toISOString()
+    };
     
     try {
       const response = await fetch('http://localhost:5006/api/save-survey-answers', {
@@ -116,11 +135,8 @@ function ReviewPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          sessionId: sessionId,
-          answers: answers,
-          questions: questions
-        })
+        body: JSON.stringify(submissionPayload),
+        signal: AbortSignal.timeout(5000)
       });
       
       if (response.ok) {
@@ -135,13 +151,22 @@ function ReviewPage() {
       }
     } catch (error) {
       console.error('Error submitting survey:', error);
-      alert('Error submitting survey: ' + error.message);
+      const blob = new Blob([JSON.stringify(submissionPayload, null, 2)], {
+        type: 'application/json'
+      });
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `${sessionId}_survey_results.json`;
+      link.click();
+      URL.revokeObjectURL(downloadUrl);
+      navigate('/completion', { state: { localOnly: true } });
     }
   };
 
   const handleEditClick = () => {
     // Navigate back to questionnaire with current answers
-    navigate('/questionnaire', { state: { answers, questions, sessionId: location.state?.sessionId } });
+    navigate('/questionnaire', { state: { answers, questions, sessionId: location.state?.sessionId, emotionSession } });
   };
 
   // Get answered questions

@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { STUDY_QUESTIONS } from '../studyQuestions';
+import { analyzeVideoFrame, loadBrowserEmotionModels } from '../lib/browserEmotion';
 import './QuestionnairePage.css';
 
 function QuestionnairePage() {
@@ -12,19 +13,23 @@ function QuestionnairePage() {
   const [showQuitModal, setShowQuitModal] = useState(false);
   const streamRef = useRef(null);
   const videoRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const recordedChunksRef = useRef([]);
   const canvasRef = useRef(null);
+  const cropCanvasRef = useRef(null);
   const emotionIntervalRef = useRef(null);
+  const emotionModelsRef = useRef(null);
+  const emotionTimelineRef = useRef([]);
+  const questionEmotionDataRef = useRef({});
+  const analysisBusyRef = useRef(false);
   const [isRecording, setIsRecording] = useState(false);
   const [currentEmotion, setCurrentEmotion] = useState(null);
   const [emotionData, setEmotionData] = useState([]);
+  const [emotionStatus, setEmotionStatus] = useState('Loading browser emotion models...');
   const [sessionId, setSessionId] = useState(null);
   const sessionIdRef = useRef(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const location = useLocation();
 
-  // CRITICAL FIX: Store question ID when recording starts
+  // Store the active question ID while local emotion sampling runs.
   const recordingQuestionIdRef = useRef(null);
   const isNavigatingRef = useRef(false);
 
@@ -43,6 +48,9 @@ function QuestionnairePage() {
       sessionIdRef.current = location.state.sessionId;
       setSessionId(location.state.sessionId);
     }
+    if (location.state?.emotionSession) {
+      questionEmotionDataRef.current = location.state.emotionSession;
+    }
   }, [location.state]);
 
   useEffect(() => {
@@ -59,129 +67,95 @@ function QuestionnairePage() {
   }, [currentQuestionIndex, currentQuestion, answers]);
 
   const captureAndAnalyzeFrame = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (analysisBusyRef.current) return;
+    if (!videoRef.current || !canvasRef.current || !cropCanvasRef.current || !emotionModelsRef.current) return;
 
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    const context = canvas.getContext('2d');
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    const imageData = canvas.toDataURL('image/jpeg');
+    analysisBusyRef.current = true;
 
     try {
-      const response = await fetch('http://localhost:5006/api/analyze-frame', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ image: imageData }),
-        // Add timeout to prevent hanging
-        signal: AbortSignal.timeout(3000)
+      const sample = await analyzeVideoFrame({
+        video: videoRef.current,
+        frameCanvas: canvasRef.current,
+        cropCanvas: cropCanvasRef.current,
+        models: emotionModelsRef.current
       });
 
-      if (!response.ok) {
-        console.warn(`Emotion analysis failed: ${response.status}`);
+      if (!sample?.success) {
+        setEmotionStatus(sample?.reason === 'no-face' ? 'No face detected locally.' : 'Local emotion sampling active.');
         return;
       }
 
-      const result = await response.json();
+      const questionId = recordingQuestionIdRef.current;
+      const emotionSample = {
+        timestamp: sample.timestamp,
+        questionId,
+        emotion: sample.emotion,
+        confidence: sample.confidence,
+        box: sample.box,
+        source: sample.source
+      };
 
-      if (result.success && result.faces && result.faces.length > 0) {
-        const emotion = result.faces[0].emotion;
-        setCurrentEmotion(emotion);
-        setEmotionData(prev => [...prev, {
-          timestamp: Date.now(),
-          emotion: emotion,
-          confidence: result.faces[0].confidence
-        }]);
-      }
+      emotionTimelineRef.current = [...emotionTimelineRef.current, emotionSample];
+      setCurrentEmotion(sample.emotion);
+      setEmotionData(emotionTimelineRef.current);
+      setEmotionStatus('Local emotion sampling active.');
     } catch (error) {
-      console.error('Error analyzing frame:', error);
+      console.error('Error analyzing frame locally:', error);
+      setEmotionStatus('Local emotion sampling is temporarily unavailable.');
+    } finally {
+      analysisBusyRef.current = false;
     }
   };
 
-  // FIXED: Accept questionId parameter
   const startRecording = (stream, questionId) => {
     try {
-      console.log(`[Q${questionId}] startRecording called`);
-      console.log(`[Q${questionId}] Stream active:`, stream && stream.active);
-      console.log(`[Q${questionId}] Video tracks:`, stream ? stream.getVideoTracks().length : 0);
+      console.log(`[Q${questionId}] start local emotion sampling called`);
 
-      // CRITICAL FIX: Ensure any previous recorder is fully stopped and cleared
-      if (mediaRecorderRef.current) {
-        console.log(`[Q${questionId}] WARNING: Previous MediaRecorder still exists, state:`, mediaRecorderRef.current.state);
-        if (mediaRecorderRef.current.state !== 'inactive') {
-          console.log(`[Q${questionId}] Force stopping previous recorder`);
-          mediaRecorderRef.current.stop();
-        }
-        // Remove all event listeners by setting them to null
-        mediaRecorderRef.current.ondataavailable = null;
-        mediaRecorderRef.current.onstop = null;
-        mediaRecorderRef.current.onerror = null;
-        mediaRecorderRef.current = null;
-        console.log(`[Q${questionId}] Previous recorder cleared`);
+      if (!stream?.active || !emotionModelsRef.current) {
+        setEmotionStatus('Camera or browser models are not ready yet.');
+        return;
       }
 
-      // Store the question ID for this recording session
+      if (emotionIntervalRef.current) {
+        clearInterval(emotionIntervalRef.current);
+        emotionIntervalRef.current = null;
+      }
+
       recordingQuestionIdRef.current = questionId;
-
-      let options = { mimeType: 'video/webm;codecs=vp8,opus' };
-
-      // Fallback if vp8 not supported
-      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-        console.warn('vp8,opus not supported, trying fallback');
-        options = { mimeType: 'video/webm' };
-      }
-
-      const mediaRecorder = new MediaRecorder(stream, options);
-      console.log(`[Q${questionId}] MediaRecorder created with:`, options.mimeType);
-
-      // Clear any existing chunks
-      recordedChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
-          console.log(`[Q${questionId}] Chunk: ${event.data.size} bytes, total: ${recordedChunksRef.current.length}`);
-        } else {
-          console.warn(`[Q${questionId}] Received chunk with 0 size!`);
-        }
-      };
-
-      mediaRecorder.onerror = (event) => {
-        console.error(`[Q${questionId}] MediaRecorder error:`, event);
-      };
-
-      mediaRecorder.onstop = () => {
-        console.log(`[Q${questionId}] MediaRecorder onstop event fired naturally`);
-      };
-
-      mediaRecorder.start(1000);
-      mediaRecorderRef.current = mediaRecorder;
+      emotionTimelineRef.current = [];
+      setEmotionData([]);
+      setCurrentEmotion(null);
       setIsRecording(true);
-
-      console.log(`[Q${questionId}] Recording started successfully, state:`, mediaRecorder.state);
+      setEmotionStatus('Local emotion sampling active. No video is being uploaded.');
 
       emotionIntervalRef.current = setInterval(() => {
         captureAndAnalyzeFrame();
-      }, 500);
+      }, 700);
+
+      captureAndAnalyzeFrame();
 
     } catch (error) {
-      console.error(`[Q${questionId}] Error starting recording:`, error);
+      console.error(`[Q${questionId}] Error starting local emotion sampling:`, error);
+      setEmotionStatus('Local emotion sampling could not start.');
     }
   };
 
-  const stopRecordingAndSave = async () => {
-    console.log('========== stopRecordingAndSave called ==========');
-    console.log('isRecording:', isRecording);
-    console.log('mediaRecorderRef.current:', !!mediaRecorderRef.current);
-    console.log('mediaRecorder state:', mediaRecorderRef.current?.state);
+  const getDominantEmotion = (samples) => {
+    const emotionCounts = {};
+    samples.forEach(item => {
+      emotionCounts[item.emotion] = (emotionCounts[item.emotion] || 0) + 1;
+    });
 
-    if (!mediaRecorderRef.current || !isRecording) {
-      console.log('No active recording to stop');
+    return samples.length > 0
+      ? Object.keys(emotionCounts).reduce((a, b) =>
+          emotionCounts[a] > emotionCounts[b] ? a : b
+        )
+      : 'Unknown';
+  };
+
+  const stopRecordingAndSave = async () => {
+    if (!isRecording) {
+      console.log('No active local emotion sampling to stop');
       return;
     }
 
@@ -190,121 +164,54 @@ function QuestionnairePage() {
       emotionIntervalRef.current = null;
     }
 
-    // CRITICAL: Capture the question ID BEFORE stopping
     const questionIdForThisRecording = recordingQuestionIdRef.current;
-    console.log(`Stopping recording for question ${questionIdForThisRecording}`);
-    console.log(`Current chunks before stop: ${recordedChunksRef.current.length}`);
+    const samples = emotionTimelineRef.current;
+    const dominantEmotion = getDominantEmotion(samples);
 
-    return new Promise((resolve) => {
-      const recorder = mediaRecorderRef.current;
-
-      // Add timeout to prevent hanging
-      const timeout = setTimeout(() => {
-        console.error(`[Q${questionIdForThisRecording}] Recording stop timeout - force resolving`);
-        setIsRecording(false);
-        recordedChunksRef.current = [];
-        setEmotionData([]);
-        recordingQuestionIdRef.current = null;
-        resolve();
-      }, 5000); // 5 second timeout
-
-      recorder.onstop = async () => {
-        clearTimeout(timeout);
-        console.log(`\n[Q${questionIdForThisRecording}] ===== ONSTOP EVENT FIRED =====`);
-        console.log(`[Q${questionIdForThisRecording}] Recording stopped. Chunks: ${recordedChunksRef.current.length}`);
-        console.log(`[Q${questionIdForThisRecording}] Recorder state: ${recorder.state}`);
-
-        setIsRecording(false);
-
-        // Small delay to ensure all chunks are collected
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        console.log(`[Q${questionIdForThisRecording}] After delay, chunks: ${recordedChunksRef.current.length}`);
-
-        try {
-          // Pass the captured question ID - but don't fail navigation if save fails
-          if (recordedChunksRef.current.length > 0) {
-            await saveVideoWithEmotion(questionIdForThisRecording);
-            console.log(`[Q${questionIdForThisRecording}] Video saved successfully`);
-          } else {
-            console.warn(`[Q${questionIdForThisRecording}] No chunks to save, skipping`);
-          }
-        } catch (error) {
-          console.error(`[Q${questionIdForThisRecording}] Error saving video (continuing anyway):`, error);
-          // Don't reject - allow navigation to continue even if save fails
+    if (questionIdForThisRecording) {
+      questionEmotionDataRef.current = {
+        ...questionEmotionDataRef.current,
+        [questionIdForThisRecording]: {
+          questionId: questionIdForThisRecording,
+          dominantEmotion,
+          emotionTimeline: samples,
+          sampleCount: samples.length,
+          source: 'browser-onnx'
         }
-
-        recordedChunksRef.current = [];
-        setEmotionData([]);
-        recordingQuestionIdRef.current = null;
-        console.log(`[Q${questionIdForThisRecording}] Cleanup complete\n`);
-        resolve();
       };
 
-      try {
-        console.log(`Calling recorder.stop()...`);
-        recorder.stop();
-      } catch (error) {
-        clearTimeout(timeout);
-        console.error(`[Q${questionIdForThisRecording}] Error stopping recorder:`, error);
-        setIsRecording(false);
-        resolve(); // Don't block navigation
-      }
-    });
+      await saveEmotionTimeline(questionIdForThisRecording, dominantEmotion, samples);
+    }
+
+    setIsRecording(false);
+    setEmotionData([]);
+    emotionTimelineRef.current = [];
+    recordingQuestionIdRef.current = null;
   };
 
-  // FIXED: Accept questionId parameter instead of using current state
-  const saveVideoWithEmotion = async (questionId) => {
-    if (recordedChunksRef.current.length === 0) {
-      console.warn(`[Q${questionId}] No recorded chunks to save`);
-      return;
-    }
+  const saveEmotionTimeline = async (questionId, dominantEmotion, samples) => {
+    console.log(`[Q${questionId}] Saving ${samples.length} derived emotion samples`);
 
-    console.log(`[Q${questionId}] Creating blob from ${recordedChunksRef.current.length} chunks`);
-
-    const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
-
-    if (blob.size === 0) {
-      console.error(`[Q${questionId}] Blob has zero size!`);
-      return;
-    }
-
-    console.log(`[Q${questionId}] Blob created: ${blob.size} bytes`);
-
-    const emotionCounts = {};
-    emotionData.forEach(item => {
-      emotionCounts[item.emotion] = (emotionCounts[item.emotion] || 0) + 1;
-    });
-
-    const dominantEmotion = emotionData.length > 0
-      ? Object.keys(emotionCounts).reduce((a, b) =>
-          emotionCounts[a] > emotionCounts[b] ? a : b
-        )
-      : 'Unknown';
-
-    console.log(`[Q${questionId}] Dominant emotion: ${dominantEmotion} from ${emotionData.length} samples`);
-
-    const formData = new FormData();
-    formData.append('video', blob, `question_${questionId}_${dominantEmotion}.webm`);
-    formData.append('questionId', questionId.toString());
-    formData.append('emotion', dominantEmotion);
-    formData.append('emotionData', JSON.stringify(emotionData));
-
-    if (sessionIdRef.current || sessionId) {
-      formData.append('sessionId', sessionIdRef.current || sessionId);
-    }
+    const payload = {
+      questionId,
+      emotion: dominantEmotion,
+      emotionData: samples,
+      sessionId: sessionIdRef.current || sessionId || undefined,
+      source: 'browser-onnx'
+    };
 
     try {
-      const response = await fetch('http://localhost:5006/api/save-question-video', {
+      const response = await fetch('http://localhost:5006/api/save-question-emotions', {
         method: 'POST',
-        body: formData,
-        // Add timeout to prevent hanging
-        signal: AbortSignal.timeout(10000) // 10 second timeout for video upload
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(5000)
       });
 
       if (!response.ok) {
-        console.warn(`[Q${questionId}] Video save failed: ${response.status}`);
-        // Don't throw error - allow survey to continue
+        console.warn(`[Q${questionId}] Emotion timeline save failed: ${response.status}`);
         return;
       }
 
@@ -319,18 +226,12 @@ function QuestionnairePage() {
         }
       }
     } catch (error) {
-      console.error(`[Q${questionId}] Error saving video (survey will continue):`, error);
-      // Don't throw error - allow survey to continue even if backend is down
+      console.error(`[Q${questionId}] Error saving derived emotions (survey will continue):`, error);
     }
   };
 
   const stopCamera = () => {
     console.log('Stopping camera');
-
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
 
     if (emotionIntervalRef.current) {
       clearInterval(emotionIntervalRef.current);
@@ -341,6 +242,8 @@ function QuestionnairePage() {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+    setIsRecording(false);
+    recordingQuestionIdRef.current = null;
   };
 
   const submitSurvey = async (finalAnswers) => {
@@ -355,12 +258,13 @@ function QuestionnairePage() {
     stopCamera();
 
     navigate('/review', {
-      state: {
-        answers: finalAnswers,
-        questions: questions,
-        sessionId: sessionIdRef.current || sessionId
-      }
-    });
+        state: {
+          answers: finalAnswers,
+          questions: questions,
+          sessionId: sessionIdRef.current || sessionId,
+          emotionSession: questionEmotionDataRef.current
+        }
+      });
   };
 
   const handleNext = async () => {
@@ -383,10 +287,9 @@ function QuestionnairePage() {
       isNavigatingRef.current = true;
 
       if (shouldRecordQuestion(currentQuestion) || isRecording) {
-        console.log(`[Q${questionId}] About to stop and save recording...`);
-        // Stop and save current recording with error handling
+        console.log(`[Q${questionId}] About to stop and save local emotion samples...`);
         await stopRecordingAndSave();
-        console.log(`[Q${questionId}] Recording stopped and saved`);
+        console.log(`[Q${questionId}] Local emotion sampling stopped and saved`);
       }
 
       if (currentQuestionIndex < totalQuestions - 1) {
@@ -403,7 +306,7 @@ function QuestionnairePage() {
         setSelectedAnswer(updatedAnswers[nextQuestionId] || '');
 
         if (shouldRecordQuestion(nextQuestion)) {
-          console.log(`\n--- Starting new recording for Q${nextQuestionId} ---`);
+          console.log(`\n--- Starting local emotion sampling for Q${nextQuestionId} ---`);
           console.log(`Stream exists:`, !!streamRef.current);
           console.log(`Stream active:`, streamRef.current?.active);
 
@@ -415,7 +318,7 @@ function QuestionnairePage() {
         } else {
           setCurrentEmotion(null);
           setEmotionData([]);
-          console.log(`Q${nextQuestionId} does not require facial recording.`);
+          console.log(`Q${nextQuestionId} does not require local emotion sampling.`);
         }
       } else {
         console.log('Last question - submitting survey');
@@ -456,7 +359,7 @@ function QuestionnairePage() {
       } else {
         setCurrentEmotion(null);
         setEmotionData([]);
-        console.log(`Q${prevQuestionId} does not require facial recording.`);
+        console.log(`Q${prevQuestionId} does not require local emotion sampling.`);
       }
     }
   };
@@ -483,16 +386,27 @@ function QuestionnairePage() {
   useEffect(() => {
     const initCamera = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user' },
-          audio: true
+          audio: false
         });
-        streamRef.current = stream;
+        streamRef.current = mediaStream;
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+          videoRef.current.srcObject = mediaStream;
         }
+
+        try {
+          const models = await loadBrowserEmotionModels();
+          emotionModelsRef.current = models;
+          setEmotionStatus('Browser emotion models ready. No video is uploaded.');
+        } catch (modelError) {
+          console.error('Browser emotion model load error:', modelError);
+          setEmotionStatus('Browser emotion models could not be loaded. The survey can continue without emotion samples.');
+          return;
+        }
+
         if (shouldRecordQuestion(questions[0])) {
-          startRecording(stream, questions[0].id);
+          startRecording(mediaStream, questions[0].id);
         }
       } catch (error) {
         console.error('Camera access error:', error);
@@ -503,10 +417,6 @@ function QuestionnairePage() {
 
     return () => {
       console.log('Component unmounting');
-
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
 
       if (emotionIntervalRef.current) {
         clearInterval(emotionIntervalRef.current);
@@ -530,14 +440,17 @@ function QuestionnairePage() {
     <div className="questionnaire-page">
       <div className="questionnaire-container">
         <canvas ref={canvasRef} style={{ display: 'none' }} />
+        <canvas ref={cropCanvasRef} style={{ display: 'none' }} />
 
         <div className="questionnaire-header">
           <button onClick={handleQuitClick} className="quit-link">
             Quit Survey
           </button>
-          {currentEmotion && (
+          {shouldRecordQuestion(currentQuestion) && (
             <div className="emotion-indicator">
-              Detected: {currentEmotion}
+              {currentEmotion
+                ? `Detected locally: ${currentEmotion} (${emotionData.length} samples)`
+                : emotionStatus}
             </div>
           )}
         </div>

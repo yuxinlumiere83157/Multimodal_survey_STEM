@@ -554,6 +554,60 @@ def save_question_video():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/save-question-emotions', methods=['POST'])
+def save_question_emotions():
+    """Save derived browser emotion samples for a specific question without raw video."""
+    try:
+        data = request.get_json() or {}
+        question_id = data.get('questionId')
+        emotion = data.get('emotion', 'Unknown')
+        emotion_timeline = data.get('emotionData', [])
+        session_id = data.get('sessionId')
+        source = data.get('source', 'browser-onnx')
+
+        if not question_id:
+            return jsonify({'error': 'Question ID is required'}), 400
+
+        if not session_id:
+            session_id = str(int(time.time()))
+
+        if not isinstance(emotion_timeline, list):
+            emotion_timeline = []
+
+        session_folder = os.path.join(app.config['QUESTION_VIDEOS_FOLDER'], str(session_id))
+        os.makedirs(session_folder, exist_ok=True)
+
+        emotion_filename = f'question_{question_id}_emotions.json'
+        emotion_path = os.path.join(session_folder, emotion_filename)
+
+        with open(emotion_path, 'w') as f:
+            json.dump({
+                'questionId': str(question_id),
+                'dominantEmotion': emotion,
+                'emotionTimeline': emotion_timeline,
+                'sampleCount': len(emotion_timeline),
+                'source': source,
+                'videoStored': False
+            }, f, indent=2)
+
+        return jsonify({
+            'success': True,
+            'message': 'Derived emotion samples saved successfully',
+            'sessionId': session_id,
+            'emotionPath': emotion_path,
+            'dominantEmotion': emotion,
+            'sampleCount': len(emotion_timeline),
+            'videoStored': False
+        })
+
+    except Exception as e:
+        print(f"Error saving derived emotion samples: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/analyze-survey-results', methods=['POST'])
 def analyze_survey_results():
     """

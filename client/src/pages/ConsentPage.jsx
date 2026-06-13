@@ -37,8 +37,8 @@ function ConsentPage() {
           <div className="terms-section">
             <p className="terms-text">
               By participating in this research study, you agree to share momentary stress self-reports,
-              usability responses, trust and privacy perceptions, open-ended reflections, and webcam-based
-              facial-emotion recordings for the stress items. Your participation is entirely voluntary, and you
+              usability responses, trust and privacy perceptions, open-ended reflections, and browser-derived
+              facial-emotion samples for the stress items. Your participation is entirely voluntary, and you
               may withdraw from the study at any time without penalty. All data collected will be kept strictly
               confidential and will only be accessible to authorized research personnel.
             </p>

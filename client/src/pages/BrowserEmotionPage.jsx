@@ -1,15 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
-import * as ort from 'onnxruntime-web';
+import { analyzeVideoFrame, loadBrowserEmotionModels } from '../lib/browserEmotion';
 import './BrowserEmotionPage.css';
-
-const EMOTIONS = ['Neutral', 'Happiness', 'Sadness', 'Surprise', 'Fear', 'Disgust', 'Anger'];
-const MODEL_URL = '/models/fer_model.onnx';
-const MEDIAPIPE_VERSION = '0.10.35';
-const MEDIAPIPE_WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
-const FACE_LANDMARKER_URL =
-  'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task';
 
 function BrowserEmotionPage() {
   const videoRef = useRef(null);
@@ -17,8 +9,7 @@ function BrowserEmotionPage() {
   const cropCanvasRef = useRef(null);
   const overlayCanvasRef = useRef(null);
   const streamRef = useRef(null);
-  const sessionRef = useRef(null);
-  const faceLandmarkerRef = useRef(null);
+  const modelsRef = useRef(null);
 
   const [status, setStatus] = useState('Loading browser models...');
   const [cameraReady, setCameraReady] = useState(false);
@@ -32,25 +23,9 @@ function BrowserEmotionPage() {
 
     async function loadModels() {
       try {
-        ort.env.wasm.numThreads = 1;
-        const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
-        const [faceLandmarker, session] = await Promise.all([
-          FaceLandmarker.createFromOptions(vision, {
-            baseOptions: {
-              modelAssetPath: FACE_LANDMARKER_URL,
-              delegate: 'CPU',
-            },
-            runningMode: 'IMAGE',
-            numFaces: 1,
-          }),
-          ort.InferenceSession.create(MODEL_URL, {
-            executionProviders: ['wasm'],
-          }),
-        ]);
-
+        const models = await loadBrowserEmotionModels();
         if (cancelled) return;
-        faceLandmarkerRef.current = faceLandmarker;
-        sessionRef.current = session;
+        modelsRef.current = models;
         setModelsReady(true);
         setStatus('Models ready. Enable the camera to analyze one frame locally.');
       } catch (loadError) {
@@ -89,49 +64,6 @@ function BrowserEmotionPage() {
     }
   }
 
-  function getBoundingBox(faceLandmarks, width, height) {
-    const xs = faceLandmarks.map((point) => point.x * width);
-    const ys = faceLandmarks.map((point) => point.y * height);
-    const xMin = Math.max(0, Math.floor(Math.min(...xs)));
-    const yMin = Math.max(0, Math.floor(Math.min(...ys)));
-    const xMax = Math.min(width - 1, Math.ceil(Math.max(...xs)));
-    const yMax = Math.min(height - 1, Math.ceil(Math.max(...ys)));
-    return { x: xMin, y: yMin, width: xMax - xMin, height: yMax - yMin };
-  }
-
-  function preprocessCrop(sourceCanvas, box) {
-    const cropCanvas = cropCanvasRef.current;
-    const cropContext = cropCanvas.getContext('2d', { willReadFrequently: true });
-    cropCanvas.width = 224;
-    cropCanvas.height = 224;
-    cropContext.imageSmoothingEnabled = false;
-    cropContext.clearRect(0, 0, 224, 224);
-    cropContext.drawImage(sourceCanvas, box.x, box.y, box.width, box.height, 0, 0, 224, 224);
-
-    const rgba = cropContext.getImageData(0, 0, 224, 224).data;
-    const planeSize = 224 * 224;
-    const input = new Float32Array(3 * planeSize);
-
-    for (let pixel = 0; pixel < planeSize; pixel += 1) {
-      const rgbaIndex = pixel * 4;
-      const red = rgba[rgbaIndex];
-      const green = rgba[rgbaIndex + 1];
-      const blue = rgba[rgbaIndex + 2];
-      input[pixel] = blue - 91.4953;
-      input[planeSize + pixel] = green - 103.8827;
-      input[planeSize * 2 + pixel] = red - 131.0912;
-    }
-
-    return new ort.Tensor('float32', input, [1, 3, 224, 224]);
-  }
-
-  function softmax(logits) {
-    const max = Math.max(...logits);
-    const exp = logits.map((value) => Math.exp(value - max));
-    const sum = exp.reduce((total, value) => total + value, 0);
-    return exp.map((value) => value / sum);
-  }
-
   function drawOverlay(box, label) {
     const video = videoRef.current;
     const overlay = overlayCanvasRef.current;
@@ -152,10 +84,10 @@ function BrowserEmotionPage() {
   async function analyzeFrame() {
     const video = videoRef.current;
     const frameCanvas = frameCanvasRef.current;
-    const faceLandmarker = faceLandmarkerRef.current;
-    const session = sessionRef.current;
+    const cropCanvas = cropCanvasRef.current;
+    const models = modelsRef.current;
 
-    if (!video || !frameCanvas || !faceLandmarker || !session || video.readyState < 2) {
+    if (!video || !frameCanvas || !cropCanvas || !models || video.readyState < 2) {
       setError('The camera or browser models are still warming up. Please try again in a moment.');
       return;
     }
@@ -165,40 +97,25 @@ function BrowserEmotionPage() {
     setResult(null);
 
     try {
-      frameCanvas.width = video.videoWidth;
-      frameCanvas.height = video.videoHeight;
-      const frameContext = frameCanvas.getContext('2d');
-      frameContext.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
-
-      const detection = faceLandmarker.detect(frameCanvas);
-      const faceLandmarks = detection.faceLandmarks?.[0];
-      if (!faceLandmarks) {
+      const sample = await analyzeVideoFrame({ video, frameCanvas, cropCanvas, models });
+      if (!sample?.success) {
         setError('No face detected. Reframe your face and try another capture.');
         return;
       }
 
-      const box = getBoundingBox(faceLandmarks, frameCanvas.width, frameCanvas.height);
-      if (box.width <= 0 || box.height <= 0) {
-        setError('Face crop was too small. Move closer to the camera and try again.');
-        return;
-      }
-
-      const input = preprocessCrop(frameCanvas, box);
-      const output = await session.run({ input });
-      const logits = Array.from(output.logits.data);
-      const probabilities = softmax(logits);
-      const classIndex = probabilities.reduce(
-        (bestIndex, value, index) => (value > probabilities[bestIndex] ? index : bestIndex),
-        0
+      drawOverlay(
+        {
+          x: sample.box[0],
+          y: sample.box[1],
+          width: sample.box[2] - sample.box[0],
+          height: sample.box[3] - sample.box[1],
+        },
+        `${sample.emotion} ${(sample.confidence * 100).toFixed(0)}%`
       );
-
-      const emotion = EMOTIONS[classIndex];
-      const confidence = probabilities[classIndex];
-      drawOverlay(box, `${emotion} ${(confidence * 100).toFixed(0)}%`);
       setResult({
-        emotion,
-        confidence,
-        box: [box.x, box.y, box.x + box.width, box.y + box.height],
+        emotion: sample.emotion,
+        confidence: sample.confidence,
+        box: sample.box,
       });
     } catch (analysisError) {
       console.error('Browser inference failed:', analysisError);

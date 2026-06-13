@@ -9,13 +9,13 @@ This project is a React + Flask prototype for an ENGE817 pilot study. It was ada
 - Trust and privacy Likert items for RQ3.
 - Open-ended reflection prompts for RQ2 and RQ3.
 
-The system still includes webcam-based facial-emotion recognition, but facial recording is now used only for the momentary stress questions. SUS, trust/privacy, and reflection questions do not record facial emotion.
+The system still includes webcam-based facial-emotion recognition, but browser-only emotion sampling is now used only for the momentary stress questions. SUS, trust/privacy, and reflection questions do not collect facial-emotion samples.
 
 ## Current Study Flow
 
 The questionnaire contains 24 questions:
 
-| Question range | Instrument | Scale/type | Facial recording |
+| Question range | Instrument | Scale/type | Facial-emotion sampling |
 | --- | --- | --- | --- |
 | Q1-Q6 | Momentary stress self-report | 0-4 Likert | Yes |
 | Q7-Q16 | SUS usability | 1-5 Likert | No |
@@ -55,6 +55,7 @@ The existing emotion-recognition endpoints are preserved:
 - `POST /api/analyze-frame`
 - `POST /api/analyze-video`
 - `POST /api/save-question-video`
+- `POST /api/save-question-emotions`
 - `GET /api/download/<filename>`
 - `GET /api/emotions`
 
@@ -95,9 +96,9 @@ Reflection items are text responses and are not scored. They are saved in `refle
 
 ## Data Storage
 
-- **`uploads/`**: Temporary storage for uploaded raw videos.
+- **`uploads/`**: Temporary storage for legacy uploaded raw videos.
 - **`results/<sessionId>/survey_answers.json`**: Saved ENGE817 survey payload with raw answers, scored answers, summary scores, reflection answers, and questions.
-- **`question_videos/<sessionId>/`**: Per-question webcam videos and emotion JSON files for stress questions.
+- **`question_videos/<sessionId>/`**: Per-question derived emotion JSON files for stress questions. In the browser-only prototype, raw webcam video is not uploaded or stored.
 
 Expected stress-item emotion files:
 
@@ -170,10 +171,10 @@ Keep the Flask backend running while using the frontend.
 
 Expected questionnaire flow:
 
-- Q1-Q6: stress Likert items with webcam/emotion recording active.
-- Q7-Q16: SUS Likert items with no webcam/emotion recording.
-- Q17-Q21: trust/privacy Likert items with no webcam/emotion recording.
-- Q22-Q24: text reflection prompts with no webcam/emotion recording.
+- Q1-Q6: stress Likert items with browser-only emotion sampling active.
+- Q7-Q16: SUS Likert items with no emotion sampling.
+- Q17-Q21: trust/privacy Likert items with no emotion sampling.
+- Q22-Q24: text reflection prompts with no emotion sampling.
 
 Expected saved survey fields:
 
@@ -224,7 +225,9 @@ This page loads an ONNX conversion of the emotion model from:
 client/public/models/fer_model.onnx
 ```
 
-It runs face detection and emotion inference in the participant's browser. Webcam frames are not sent to the Flask API. This is intended as the lowest-cost and strongest-privacy deployment direction: a static site can host the UI/model, while only consented survey answers and derived emotion labels need to be saved to durable storage.
+It runs face detection and emotion inference in the participant's browser. Webcam frames are not sent to the Flask API. The main questionnaire also uses this browser-only path for Q1-Q6, then saves derived emotion timelines through `/api/save-question-emotions` when the Flask backend is available. If the backend is unavailable, the review page falls back to local analysis and downloads a JSON results file instead of storing data remotely.
+
+This is intended as the lowest-cost and strongest-privacy deployment direction: a static site can host the UI/model, while only consented survey answers and derived emotion labels need to be saved to durable storage.
 
 The conversion is reproducible with:
 

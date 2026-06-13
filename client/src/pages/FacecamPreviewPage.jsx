@@ -64,8 +64,8 @@ function FacecamPreviewPage() {
             <div className="popup-icon">📷</div>
             <h2 className="popup-title">Camera Access Required</h2>
             <p className="popup-text">
-              This study requires camera access to monitor your facial expressions during the survey.
-              Your video will not be recorded or stored without your explicit consent.
+              This study uses camera access to derive facial-emotion samples during stress items.
+              Video frames stay in your browser and are not uploaded by the privacy-first prototype.
             </p>
             {permissionDenied && (
               <p className="popup-warning">
