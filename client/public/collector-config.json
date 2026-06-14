@@ -1,5 +1,5 @@
 {
-  "enabled": false,
+  "enabled": true,
   "projectId": "multimodal-survey-stem",
-  "collectorUrl": ""
+  "collectorUrl": "https://multimodal-survey-collector.impale5666.workers.dev"
 }
