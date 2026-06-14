@@ -45,11 +45,14 @@ reflection questions do not collect emotion samples.
 - Webcam frames are processed in the participant's browser.
 - Raw webcam video and raw camera frames are not uploaded by the hosted static
   demo.
-- Only consented questionnaire answers, derived emotion timelines, analysis
-  JSON, and scalar summary fields are sent to the Cloudflare collector.
+- The Cloudflare collector receives the project ID, session ID, source origin,
+  app version, consented questionnaire answers, derived emotion timelines,
+  analysis JSON, and scalar summary fields.
 - The collector does not store IP addresses or user-agent strings.
-- If the collector is unavailable, the frontend falls back to local Flask saving
-  when available, then to a browser JSON download.
+- When the collector is enabled, the system-check page requires it to be
+  reachable before the participant continues. If a later submission attempt
+  fails, the review page falls back to local Flask saving when available, then to
+  a browser JSON download.
 - Hugging Face hosts the static participant interface; it does not receive or
   store the submitted survey answers from the static deployment.
 
@@ -263,10 +266,10 @@ Useful frontend commands:
 - Q22-Q24 show text reflection prompts with no emotion sampling.
 - The system-check page reports model readiness before camera setup.
 - The review page shows the configured result destination.
-- Submission succeeds through the Cloudflare collector when the Worker is
-  reachable.
-- If collector submission fails, the app falls back to local Flask saving or a
-  browser JSON download.
+- With the collector enabled, the system-check page blocks progress if the
+  Worker is unreachable.
+- If a collector submission fails after the system check, the app falls back to
+  local Flask saving or a browser JSON download.
 
 Expected saved survey fields:
 
